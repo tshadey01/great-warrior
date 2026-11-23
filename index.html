@@ -92,7 +92,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 /* Screens */
 .screen { position: absolute; inset: 0; display: grid; place-items: center; overflow-y: auto; background: rgba(10,8,18,.72); backdrop-filter: blur(2px);
   padding-block: 20px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-.panel { width: min(920px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 14px; }
+.panel { width: min(980px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 14px; }
 .panel h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(1.6rem, 5vw, 2.4rem); margin: 0; letter-spacing: .02em; line-height: 1.1; text-wrap: balance; }
 .panel h1 span { color: var(--gold); }
 .panel h2 { font-family: var(--f-display); font-size: 1.15rem; margin: 0; letter-spacing: .03em; text-wrap: balance; }
@@ -115,7 +115,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .perks .got { color: var(--ink); }
 .perks .got::before { content: "■ "; color: var(--gold); }
 .perks .next::before { content: "□ "; }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.slots { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: .72rem; color: var(--mute); }
+.slots .grp { display: flex; align-items: center; gap: 4px; }
+.slots em { font-style: normal; font-family: var(--f-mono); font-size: .66rem; letter-spacing: .04em; margin-right: 2px; }
+.slots .s { min-width: 22px; height: 20px; padding: 0 6px; border-radius: 5px; border: 1px dashed #4a4366; display: inline-flex; align-items: center; justify-content: center; font-style: normal; font-size: .68rem; color: #6f6890; }
+.slots .s.full { border: 1px solid var(--c); background: color-mix(in srgb, var(--c) 22%, transparent); color: #fff; }
 .card { --c: #888; all: unset; box-sizing: border-box; cursor: pointer; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 6px; align-content: start; min-width: 0; }
 .card:hover, .card:focus-visible { border-color: var(--c); box-shadow: 0 0 0 1px var(--c), 0 0 22px -8px var(--c); }
 .card:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
@@ -804,6 +809,7 @@ function tick(time) {
 
   if (inBar === 0 && recoverBar >= 0 && absBar >= recoverBar) recoverAll(time);
   ambTick(time, inBar);
+  if (inBar === 0) unsilence(time, absBar);
 
   if (inBar === 0) {
     pilotNow = byId("rock").wanted;
@@ -1062,7 +1068,7 @@ function dropout(count) {
 function recoverAll(time) {
   recoverBar = -1;
   for (const s of layers()) {
-    if (!s.dropped) continue;
+    if (!s.dropped || s.silenced) continue;
     s.dropped = false;
     if (s.wanted) { ramp(s.fader.gain, 1, time, 0.012, time); setState(s, "on", time); }
   }
@@ -1224,6 +1230,9 @@ const ET = {
   crackle:   { name: "Crackle", hp: 26, r: 14, spd: 55, dmg: 10, color: "#ff9b54", cost: 2 },
   clipper:   { name: "Clipper", hp: 34, r: 15, spd: 45, dmg: 14, color: "#ff4d6d", cost: 2.5 },
   drone:     { name: "Drone", hp: 75, r: 22, spd: 32, dmg: 12, color: "#9b7bff", cost: 3.5 },
+  pop:       { name: "Pop", hp: 16, r: 12, spd: 92, dmg: 8, color: "#ffe066", cost: 1.5 },      // bursts when it dies
+  ticker:    { name: "Ticker", hp: 55, r: 17, spd: 0, dmg: 10, color: "#7ee0c3", cost: 3 },     // turret: fires every beat
+  squeal:    { name: "Squeal", hp: 30, r: 13, spd: 70, dmg: 10, color: "#ff8fd8", cost: 2.5 },  // sniper: aims at where you are
   overdrive: { name: "Overdrive", hp: 1000, r: 38, spd: 60, dmg: 16, color: "#ff6f3c", boss: true },
   mute:      { name: "The Mute", hp: 3000, r: 46, spd: 40, dmg: 18, color: "#d6d0ff", boss: true },
 };
@@ -1232,7 +1241,7 @@ function spawnEnemy(type, x, y, scale, elite) {
   const t = ET[type];
   const hp = t.hp * scale * (elite ? 3 : 1);
   const e = { id: ++eid, type, x, y, r: t.r * (elite ? 1.45 : 1), hp, maxHp: hp, spd: t.spd, dmg: t.dmg * (run.act === 2 ? 1.25 : 1), color: t.color,
-    alive: true, on: false, elite: !!elite, boss: !!t.boss, tele: 0, dash: 0, dvx: 0, dvy: 0, phase: eid % 2, flash: 0, wob: Math.random() * 6 };
+    alive: true, on: false, elite: !!elite, silencer: !!elite && !t.boss, rot: Math.random() * 6.28, boss: !!t.boss, tele: 0, dash: 0, dvx: 0, dvy: 0, phase: eid % 2, flash: 0, wob: Math.random() * 6 };
   enemies.push(e);
   return e;
 }
@@ -1248,13 +1257,21 @@ function buildRoom() {
   if (type === "mini") { run.waves.push([{ type: "overdrive" }, { type: "hiss" }, { type: "hiss" }]); }
   else if (type === "boss") { run.waves.push([{ type: "mute" }]); }
   else {
-    let budget = 4 + local * 1.8 + (act - 1) * 4;
-    if (type === "elite") budget *= 1.35;
-    const avail = ["hiss"]; if (idx >= 2) avail.push("crackle"); if (idx >= 3) avail.push("clipper"); if (idx >= 4 || act === 2) avail.push("drone");
+    // Depth scaling: room 1 is a handful of chasers; each room adds a new trick, Act II brings everything at once
+    let budget = idx === 1 ? 3 : 2.5 + local * 1.7 + (act - 1) * 7;
+    if (type === "elite") budget *= 1.3;
+    const avail = ["hiss"];
+    if (idx >= 2) avail.push("pop");
+    if (idx >= 3) avail.push("crackle");
+    if (idx >= 4) avail.push("ticker", "clipper");
+    if (idx >= 5 || act === 2) avail.push("squeal");
+    if (act === 2) avail.push("drone");
     const list = [];
     if (type === "elite") { const pick = avail.filter(a => a !== "hiss"); list.push({ type: pick.length ? pick[Math.floor(Math.random() * pick.length)] : "hiss", elite: true }); budget -= 5; }
     while (budget > 0.9) { const t = avail[Math.floor(Math.random() * avail.length)]; if (ET[t].cost > budget + 0.5) { if (t === "hiss") break; continue; } list.push({ type: t }); budget -= ET[t].cost; }
-    if (list.length > 6) { const half = Math.ceil(list.length / 2); run.waves.push(list.slice(0, half), list.slice(half)); } else run.waves.push(list);
+    if (type === "fight" && act === 2 && Math.random() < 0.5) { const pick = avail.filter(a => a !== "hiss"); list.push({ type: pick[Math.floor(Math.random() * pick.length)], elite: true }); }
+    const nw = idx <= 2 ? 1 : act === 1 ? 2 : 3, per = Math.ceil(list.length / nw);
+    for (let i = 0; i < list.length; i += per) run.waves.push(list.slice(i, i + per));
   }
   run.scale = scale;
   spawnWave();
@@ -1275,11 +1292,17 @@ function shootAt(target, speed, o) {
   const a = target ? Math.atan2(target.y - P.y, target.x - P.x) : aimAngle();
   shot(Object.assign({ x: P.x + Math.cos(a) * 20, y: P.y + Math.sin(a) * 20, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed }, o));
 }
+// Set bonuses at 3/5/7 pieces. Power Metal: area attacks get bigger and hit harder.
+const SET_TIERS = { pm: { what: "area damage and size", tiers: [[3, 0.1], [5, 0.2], [7, 0.3]] } };
+function setTier(id) { const T = SET_TIERS[id]; if (!T || !SETS[id]) return 0; const k = membersOf(id).size; let b = 0; for (const [n, v] of T.tiers) if (k >= n) b = v; return b; }
+const aoeMul = () => 1 + setTier("pm");
 function ring(x, y, r, dmg, color, push = 0) {
+  const m = aoeMul(); r *= m; dmg *= m;
   fx.push({ k: "ring", x, y, r, t: 0, life: 0.35, color });
   for (const e of livingEnemies()) { const d = Math.hypot(e.x - x, e.y - y); if (d < r + e.r) { hurt(e, dmg, color); if (push && !e.boss) { const a = Math.atan2(e.y - y, e.x - x); e.x += Math.cos(a) * push; e.y += Math.sin(a) * push; } } }
 }
 function cone(angle, spread, range, dmg, color) {
+  { const m = aoeMul(); range *= m; dmg *= m; }
   fx.push({ k: "cone", x: P.x, y: P.y, a: angle, s: spread, r: range, t: 0, life: 0.25, color });
   for (const e of livingEnemies()) {
     const d = Math.hypot(e.x - P.x, e.y - P.y); if (d > range + e.r) continue;
@@ -1288,6 +1311,7 @@ function cone(angle, spread, range, dmg, color) {
   }
 }
 function slash(angle, range, half, dmg, color) {
+  { const m = aoeMul(); range *= m; dmg *= m; }
   fx.push({ k: "crescent", x: P.x, y: P.y, a: angle, s: half, r: range, t: 0, life: 0.18, color, follow: true });
   for (const e of livingEnemies()) {
     const d = Math.hypot(e.x - P.x, e.y - P.y); if (d > range + e.r) continue;
@@ -1332,7 +1356,7 @@ function onMusic(type, a) {
   const pw = power(), C = id => byId(id).color;
   const elId = { flute: "flute", drop: "drop", taiko: "taiko", funk: "funk", strings: "strings" }[type];
   if (type === "arp") return withEl("lightning", () => musicAttack(type, a, pw, C));
-  if (elId) return withEl(run.el.get(elId) || null, () => musicAttack(type, a, pw, C));
+  if (elId) return withEl(nextLens(), () => musicAttack(type, a, pw, C));
   musicAttack(type, a, pw, C);
 }
 function musicAttack(type, a, pw, C) {
@@ -1347,7 +1371,7 @@ function musicAttack(type, a, pw, C) {
     // Plasma Blade: short-range beam aimed straight at the nearest enemy, hits everything along it
     case "drop": if (active("drop")) { const big = a.big, len = big ? 170 + 15 * LV("drop") : 120; const t = nearest(P.x, P.y, len + 60); const a0 = t ? Math.atan2(t.y - P.y, t.x - P.x) : aimAngle(); plasmaBeam(a0, len, big ? 18 : 12, (big ? 18 : 9) * lvm("drop") * pw, C("drop"), big ? 0.28 : 0.16); if (big) shake(2); } break;
     // War Hammer: slow, heavy area slam in front of the Rig
-    case "taiko": if (active("taiko")) { const a0 = aimAngle(), x = P.x + Math.cos(a0) * 70, y = P.y + Math.sin(a0) * 70, r = 80 + 8 * LV("taiko"); fx.push({ k: "slam", x, y, r, t: 0, life: 0.45, color: C("taiko") }); ring(x, y, r, 30 * a.v * lvm("taiko") * pw, C("taiko"), 40); shake(a.v > 0.85 ? 5 : 2); } break;
+    case "taiko": if (active("taiko")) { const a0 = aimAngle(), x = P.x + Math.cos(a0) * 70, y = P.y + Math.sin(a0) * 70, r = 80 + 8 * LV("taiko"); fx.push({ k: "slam", x, y, r: r * aoeMul(), t: 0, life: 0.45, color: C("taiko") }); ring(x, y, r, 30 * a.v * lvm("taiko") * pw, C("taiko"), 40); shake(a.v > 0.85 ? 5 : 2); } break;
     case "arp": if (active("arp")) {
       let from = P, t = nearest(P.x, P.y, 320); const hitSet = new Set(); let jumps = 2 + LV("arp");
       const dmg = 6 * lvm("arp") * (LV("arp") === 1 ? 1.8 : 1) * pw;
@@ -1375,7 +1399,7 @@ function onGear(setId, inst) {
   if (now - (hookLast[key] || 0) < h[1]) return;
   hookLast[key] = now;
   const pw = power(), col = SETS[setId].color, list = livingEnemies();
-  if (h[0].startsWith("wpn:")) { const member = h[0].slice(4), w = [...equipped].find(g => PIECE[g].hands && PIECE[g].set === setId && PIECE[g].covers.includes(member)); if (w && WPN_ATK[w]) WPN_ATK[w](member, pw, col); return; }
+  if (h[0].startsWith("wpn:")) { const member = h[0].slice(4), w = [...equipped].find(g => PIECE[g].hands && PIECE[g].set === setId && PIECE[g].covers.includes(member)); if (w && WPN_ATK[w]) withEl(nextLens(), () => WPN_ATK[w](member, pw, col)); return; }
   switch (h[0]) {
     case "stomp": ring(P.x, P.y, 80, 6 * pw, col, 12); break;
     case "pulse": ring(P.x, P.y, 70, 4 * pw, col, 6); break;
@@ -1387,7 +1411,7 @@ function onGear(setId, inst) {
     case "spread": spread(5, 0.22, 5 * pw, col); break;
     case "scream": cone(aimAngle(), 0.5, 280, 9 * pw, col); break;
     case "horn": cone(aimAngle(), 0.8, 230, 10 * pw, col); break;
-    case "slam": { const t = nearest(P.x, P.y, 460); if (t) { fx.push({ k: "slam", x: t.x, y: t.y, r: 72, t: 0, life: 0.4, color: col }); ring(t.x, t.y, 72, 18 * pw, col); } break; }
+    case "slam": { const t = nearest(P.x, P.y, 460); if (t) { fx.push({ k: "slam", x: t.x, y: t.y, r: 72 * aoeMul(), t: 0, life: 0.4, color: col }); ring(t.x, t.y, 72, 18 * pw, col); } break; }
     case "heal": heal(2, col); break;
   }
 }
@@ -1412,20 +1436,25 @@ function heal(n, color) { const before = P.hp; P.hp = Math.min(P.maxHp, P.hp + n
 // Lightning: damage rolls 50-150%. A roll in the top 10% stuns for 0.5 s (bosses: 0.25 s, once per 2 s)
 const BURN_DPS = 4;
 const EL = {
-  fire:      { name: "Fire", color: "#ff7a3c", music: "gets a hot overdrive on top", fx: "Hits burn for 4 damage a second per stack, stacking up to 6." },
-  cold:      { name: "Cold", color: "#8fe3ff", music: "gets icy, ringing echoes", fx: "Hits deal 25% less but slow the enemy's movement and attacks by 25% for 2 s." },
-  lightning: { name: "Lightning", color: "#ffe066", music: "gets a crackling, bit-crushed edge", fx: "Damage rolls 50% to 150%. The top 10% of rolls stun for 0.5 s." },
+  fire:      { name: "Fire", color: "#ff7a3c", music: "get a hot overdrive", bed: "crackling logs", fx: "Full damage, and hits burn for 4 damage a second per stack, stacking up to 6." },
+  cold:      { name: "Cold", color: "#8fe3ff", music: "get icy, ringing echoes", bed: "blowing wind", fx: "Hits deal 25% less but slow the enemy's movement and attacks by 25% for 2 s." },
+  lightning: { name: "Lightning", color: "#ffe066", music: "get a crackling edge", bed: "a thunderstorm (a loud crash on every stun)", fx: "Damage rolls 50% to 150%. The top 10% of rolls stun for 0.5 s." },
 };
 const EL_WEAPONS = ["flute", "drop", "taiko", "funk", "strings"];
 let curEl = null;
 function withEl(el, fn) { const prev = curEl; curEl = el; try { fn(); } finally { curEl = prev; } }
+// Lenses: up to 2 sockets on the Rig. They never replace gear; weapon hits take turns through the lenses you carry.
+const LENS_MAX = 2;
+const lensLv = el => { const l = run && run.lens && run.lens.find(x => x.el === el); return l ? l.lv : 0; };
+function nextLens() { if (!run || !run.lens || !run.lens.length) return null; run.lensIdx = ((run.lensIdx || 0) + 1) % run.lens.length; return run.lens[run.lensIdx].el; }
+const LENS_UP = { fire: "Lv 2: burn 6 per second per stack, up to 8 stacks", cold: "Lv 2: slow 35% instead of 25%", lightning: "Lv 2: stuns on the top 15% of rolls" };
 function applyEl(e, dmg, el) {
-  const now = performance.now();
-  if (el === "fire") { e.burn = Math.min(6, (e.burn || 0) + 1); e.burnUntil = now + 3000; }
-  else if (el === "cold") { dmg *= 0.75; e.chillUntil = now + 2000; }
+  const now = performance.now(), lv = Math.max(1, lensLv(el));
+  if (el === "fire") { e.burn = Math.min(lv >= 2 ? 8 : 6, (e.burn || 0) + 1); e.burnDps = lv >= 2 ? 6 : BURN_DPS; e.burnUntil = now + 3000; }
+  else if (el === "cold") { dmg *= 0.75; e.chillUntil = now + 2000; e.chillK = lv >= 2 ? 0.35 : 0.25; }
   else if (el === "lightning") {
     const r = Math.random(); dmg *= 0.5 + r;
-    if (r >= 0.9 && !(e.boss && now < (e.stunCd || 0))) { e.stunUntil = now + (e.boss ? 250 : 500); e.stunCd = now + 2000; thunderCrash(); fx.push({ k: "ring", x: e.x, y: e.y, r: e.r + 14, t: 0, life: 0.3, color: EL.lightning.color }); }
+    if (r >= (lv >= 2 ? 0.85 : 0.9) && !(e.boss && now < (e.stunCd || 0))) { e.stunUntil = now + (e.boss ? 250 : 500); e.stunCd = now + 2000; thunderCrash(); fx.push({ k: "ring", x: e.x, y: e.y, r: e.r + 14, t: 0, life: 0.3, color: EL.lightning.color }); }
   }
   return dmg;
 }
@@ -1461,7 +1490,7 @@ function ambInit() {
   amb = { bus, fireG, pop, popF, coldG, windF, windV, ltG, rumble, crash, boom, boomTail, lastCrash: 0, lastRumble: 0 };
   return amb;
 }
-function elCount(el) { if (!run || !run.el) return 0; let n = 0; for (const [id, v] of run.el) if (v === el && run.lv.has(id)) n++; if (el === "lightning" && run.lv && run.lv.has("arp") && active("arp")) n++; return n; }
+function elCount(el) { if (!run || !run.lens) return 0; let n = lensLv(el); if (el === "lightning" && run.lv && run.lv.has("arp") && active("arp")) n++; return n; }
 function ambUpdate() {
   if (!nodes) return; if (!amb && !run) return; const a = ambInit();
   const lvl = n => n ? Math.min(1, 0.6 + 0.2 * n) : 0;
@@ -1475,10 +1504,10 @@ function ambTick(time, inBar) {
   if (!amb) return;
   const f = elCount("fire"), c = elCount("cold"), l = elCount("lightning");
   if (f && Math.random() < 0.18 + 0.06 * f) {          // pops land off the grid
-    const t = time + Math.random() * 0.1;
+    const t = Math.max(time + Math.random() * 0.1, (amb.lastPop || 0) + 0.06);   // never schedule before the last pop
     amb.popF.frequency.setValueAtTime(1400 + Math.random() * 3200, t);
-    amb.pop.triggerAttackRelease(0.01 + Math.random() * 0.03, t, 0.3 + Math.random() * 0.7);
-    if (Math.random() < 0.25) amb.pop.triggerAttackRelease(0.01, t + 0.02 + Math.random() * 0.05, 0.2 + Math.random() * 0.4);
+    amb.pop.triggerAttackRelease(0.01 + Math.random() * 0.03, t, 0.3 + Math.random() * 0.7); amb.lastPop = t;
+    if (Math.random() < 0.25) { const t2 = t + 0.06 + Math.random() * 0.05; amb.pop.triggerAttackRelease(0.01, t2, 0.2 + Math.random() * 0.4); amb.lastPop = t2; }
   }
   if (c && inBar % 4 === 0) {                          // gusts drift every beat
     amb.windF.frequency.rampTo(320 + Math.random() * 1100, 0.8, time);
@@ -1504,19 +1533,22 @@ function hurt(e, dmg, color) {
     e.alive = false; run.kills++;
     for (let i = 0; i < (e.boss ? 40 : 10); i++) fx.push({ k: "spark", x: e.x, y: e.y, vx: rnd(-1, 1) * 260, vy: rnd(-1, 1) * 260, t: 0, life: rnd(0.3, 0.7), color: e.color });
     if (e.boss) { shake(14); bullets = []; }
+    if (e.type === "pop") fx.push({ k: "boom", x: e.x, y: e.y, r: e.elite ? 95 : 72, t: 0, life: 0.75, fuse: 0.5, dmg: 12 * (run.act === 2 ? 1.25 : 1), sil: e.silencer, act2: run.act === 2, color: e.color });
   }
 }
 
 // ---------- Enemy behaviour (everything they do lands on the beat) ----------
-function eBullet(x, y, a, spd, dmg, color = "#ff7a8f", r = 6) { bullets.push({ x, y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, dmg, r, color, life: 6 }); }
+let curSil = false;
+function eBullet(x, y, a, spd, dmg, color = "#ff7a8f", r = 6) { bullets.push({ x, y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, dmg, r, color, life: 6, sil: curSil }); }
 function enemyBeat(inBar, absBar) {
   const spd = run.act === 2 ? 240 : 205;
   const now = performance.now();
   for (const e of enemies) {
     if (!e.alive || !e.on) continue;
     if (now < (e.stunUntil || 0)) continue;
-    if (now < (e.chillUntil || 0) && Math.random() < 0.25) continue;
+    if (now < (e.chillUntil || 0) && Math.random() < (e.chillK || 0.25)) continue;
     const toP = Math.atan2(P.y - e.y, P.x - e.x);
+    curSil = e.silencer;
     if (e.type === "crackle") {
       const fireBar = (absBar + e.phase) % 2 === 0;
       if (fireBar && inBar === 8) e.tele = 1;
@@ -1524,6 +1556,13 @@ function enemyBeat(inBar, absBar) {
     } else if (e.type === "clipper") {
       if (inBar === 12) { e.tele = 1; e.lock = toP; }
       if (inBar === 0 && e.tele) { e.tele = 0; e.dash = 0.38; e.dvx = Math.cos(e.lock) * (e.elite ? 640 : 540); e.dvy = Math.sin(e.lock) * (e.elite ? 640 : 540); }
+    } else if (e.type === "ticker") {
+      // constant-rate turret: a pair of shots every beat, the barrel turning a little each time
+      if (inBar % 4 === 0) { e.rot += 0.55; const n = e.elite ? 4 : 2; for (let i = 0; i < n; i++) eBullet(e.x, e.y, e.rot + i * Math.PI * 2 / n, spd * 0.7, 8, e.color, 6); }
+    } else if (e.type === "squeal") {
+      // sniper: sights you for a beat, then fires one fast shot at where you are right now
+      if (inBar === 8 && (absBar + e.phase) % 2 === 0) e.tele = 1;
+      if (inBar === 12 && e.tele) { e.tele = 0; const n = e.elite ? 3 : 1; for (let i = 0; i < n; i++) eBullet(e.x, e.y, toP + (i - (n - 1) / 2) * 0.12, spd * 2, 11, e.color, 5); }
     } else if (e.type === "drone") {
       if (inBar === 0 && (absBar + e.phase) % 2 === 0) { const n = e.elite ? 16 : 10, off = Math.random(); for (let i = 0; i < n; i++) eBullet(e.x, e.y, off + i * Math.PI * 2 / n, spd * 0.8, 9, e.color, 7); }
       if (inBar === 8) e.tele = 1;
@@ -1543,6 +1582,7 @@ function enemyBeat(inBar, absBar) {
       if (!e.p2 && p2) { e.p2 = true; banner("The Mute is furious", "Silence waves incoming"); }
     }
   }
+  curSil = false;
 }
 
 let lastBarAt = 0;
@@ -1559,10 +1599,10 @@ function barLine(absBar) {
 // ---------- Run flow ----------
 function newRun() {
   const hp = 100 + 15 * ownedN("hp");
-  run = { room: 0, act: 1, type: "start", mode: "choice", kills: 0, lv: new Map(), el: new Map(), vol: 0, tempo: 0, sub: 0, rerolls: ownedN("reroll"), fightOver: false, pendingReward: false, spawnPending: false, waves: [], path: [], started: performance.now(), miniDown: false, bossDown: false };
+  run = { room: 0, act: 1, type: "start", mode: "choice", kills: 0, lv: new Map(), lens: [], lensIdx: 0, tips: 0, vol: 0, tempo: 0, sub: 0, rerolls: ownedN("reroll"), fightOver: false, pendingReward: false, spawnPending: false, waves: [], path: [], started: performance.now(), miniDown: false, bossDown: false };
   P.maxHp = hp; P.hp = hp; P.x = AW / 2; P.y = AH / 2; P.hitUntil = 0; P.gongUntil = 0;
   enemies = []; shots = []; bullets = []; fx = []; texts = [];
-  for (const s of STEMS) if (!s.base) stemOff(s.id, true);
+  for (const s of STEMS) { s.silenced = 0; if (!s.base) stemOff(s.id, true); }
   equipped.clear(); for (const k in gearOrder) delete gearOrder[k];
   specialPending = false; if (specialPhase === "solo") specialPhase = null; cooldownUntil = 0; invulnUntil = 0;
   if (baseBpm !== 128) { baseBpm = 128; if (nodes && !specialPhase) Tone.Transport.bpm.rampTo(baseBpm, 0.5); }
@@ -1603,7 +1643,7 @@ function endRun(won) {
   if (baseBpm !== 128) { baseBpm = 128; if (!specialAbort) Tone.Transport.bpm.rampTo(128, 2); }
   resetMix();
   const xp = roomsCleared * 15 + run.kills + (run.miniDown ? 60 : 0) + (run.bossDown ? 150 : 0) + (won ? 100 : 0);
-  const roy = Math.floor(xp / 2);
+  const roy = Math.floor(xp / 2) + (run.tips || 0);
   const before = save.level;
   save.xp += xp; save.royalties += roy; save.runs++; if (won) save.wins++; save.bestRoom = Math.max(save.bestRoom, run.room);
   while (save.xp >= xpToNext(save.level)) { save.xp -= xpToNext(save.level); save.level++; }
@@ -1659,7 +1699,11 @@ function makeChoices(kind) {
     }
     if ((run.sub || 0) < 3) c.push({ type: "hp", w: kind === "green" ? 2 : 0.9 });
     if ((run.vol || 0) < 3) c.push({ type: "amp", w: 0.8 });
-    for (const id of run.lv.keys()) if (EL_WEAPONS.includes(id) && !run.el.has(id)) for (const el of Object.keys(EL)) c.push({ type: "elem", id, el, w: 0.45 });
+    const armed = [...run.lv.keys()].some(id => EL_WEAPONS.includes(id)) || [...equipped].some(g => PIECE[g].hands);
+    if (armed) {
+      if (run.lens.length < LENS_MAX) for (const el of Object.keys(EL)) if (!lensLv(el)) c.push({ type: "lens", el, w: 0.5 });
+      for (const l of run.lens) if (l.lv < 2) c.push({ type: "lens", el: l.el, up: true, w: 0.45 });
+    }
     if ((run.tempo || 0) < 3) c.push({ type: "tempo", w: 0.7 });
   }
   const out = [];
@@ -1669,6 +1713,7 @@ function makeChoices(kind) {
     const total = left.reduce((t, x) => t + x.w, 0); let r = Math.random() * total;
     for (const x of left) { r -= x.w; if (r <= 0) { out.push(x); break; } }
   }
+  if (kind !== "start") out.push(P.hp < P.maxHp * 0.6 || (kind !== "green" && Math.random() < 0.4) ? { type: "patch" } : { type: "tip" });
   return out;
 }
 function cardHTML(card, i) {
@@ -1683,14 +1728,27 @@ function cardHTML(card, i) {
   } else if (card.type === "gear") {
     const pc = PIECE[card.id], S = SETS[pc.set], have = membersOf(pc.set); color = S.color;
     tag = S.name.toUpperCase() + " · " + (have.size + pc.covers.filter(m => !have.has(m)).length) + "/7"; title = pc.item;
-    music = "Adds: " + pc.member + " (" + pc.adds + ")"; eff = GEAR_FX[card.id]; slot = pc.hands ? (pc.hands === 2 ? "Two-handed weapon · counts as 2" : "One-handed weapon") : BODY[pc.body].label + " armor";
+    music = "Adds: " + pc.member + " (" + pc.adds + ")"; eff = GEAR_FX[card.id] + (SET_TIERS[pc.set] ? ` Set bonus: ${SET_TIERS[pc.set].tiers.map(([n, v]) => n + "/7 +" + Math.round(v * 100) + "%").join(", ")} ${SET_TIERS[pc.set].what}.` : ""); slot = pc.hands ? (pc.hands === 2 ? "Two-handed weapon · counts as 2" : "One-handed weapon") : BODY[pc.body].label + " armor";
   } else if (card.type === "hp") { const n = (run.sub || 0) + 1; color = "#5ee0a0"; tag = `MIX · ${n}/3`; title = "Subwoofer"; music = "Mix: the kick drum gets deeper and louder (+2 dB)"; eff = "+20 max hull and repair 20. Base beat shots deal +25% damage."; slot = "Chassis"; }
   else if (card.type === "amp") { const n = (run.vol || 0) + 1; color = "#ffd166"; tag = `MIX · ${n}/3`; title = "Amp: volume up"; music = "Mix: the whole song gets louder (+1.5 dB)"; eff = "+15% damage on every attack."; slot = "Amp"; }
   else if (card.type === "tempo") { const n = (run.tempo || 0) + 1; color = "#3dd6ff"; tag = `MIX · ${n}/3`; title = "Metronome: tempo up"; music = `Mix: the song speeds up by 4 BPM (to ${actBpm() + 4})`; eff = "Every note comes sooner, so every weapon fires faster. The Static moves on the beat too, so they speed up as well."; slot = "Metronome"; }
-  else if (card.type === "elem") { const E2 = EL[card.el], st = byId(card.id); color = E2.color; tag = "ELEMENT · " + E2.name.toUpperCase(); title = E2.name + " " + st.power; music = "Mix: the " + st.layer.toLowerCase() + " " + E2.music; eff = E2.fx; slot = "Modifies " + st.power + " (one element per weapon)"; }
+  else if (card.type === "lens") { const E2 = EL[card.el]; color = E2.color; tag = card.up ? "LENS · LEVEL 2" : "LENS · " + E2.name.toUpperCase(); title = E2.name + " Lens" + (card.up ? " Lv 2" : ""); music = "Mix: your weapon layers " + E2.music + ", with " + E2.bed + " behind the song"; eff = card.up ? LENS_UP[card.el] + "." : E2.fx; slot = card.up ? "Upgrades the lens in its socket" : `Lens socket ${run.lens.length + 1}/${LENS_MAX} · never replaces gear`; }
+  else if (card.type === "tip") { color = "#9ad17a"; tag = "SKIP"; title = "Tip jar"; music = "Keep the song as it is"; eff = `+${tipAmt()} Royalties, paid out when the run ends.`; slot = "Changes nothing on the Rig"; }
+  else if (card.type === "patch") { color = "#5ee0a0"; tag = "SKIP"; title = "Quick patch"; music = "Keep the song as it is"; eff = `Repair ${patchAmt()} hull.`; slot = "Changes nothing on the Rig"; }
   const rm = plan(card);
   const warn = rm.length ? `<span class="warn">Replaces ${rm.map(nameOf).join(" and ")} on the next bar</span>` : "";
   return `<button class="card" type="button" data-i="${i}" style="--c:${color}"><span class="tag">${tag}</span><b>${title}</b><span class="music">${music}</span><span class="fx">${eff}</span><span class="slot">${slot}</span>${warn}<kbd>${i + 1}</kbd></button>`;
+}
+// Which mounts on the Rig are filled, so a reward never surprises you
+function slotStrip() {
+  const cell = (name, color, short) => name ? `<i class="s full" style="--c:${color}" title="${name}">${short || name.split(" ").pop()}</i>` : `<i class="s">empty</i>`;
+  const grp = (label, cells) => `<span class="grp"><em>${label}</em>${cells.join("")}</span>`;
+  const hands = []; for (const it of handItems()) { const nm = nameOf(it), col = it.kind === "layer" ? byId(it.id).color : SETS[PIECE[it.id].set].color; for (let k = 0; k < it.hands; k++) hands.push(cell(nm + (it.hands === 2 ? " (2H)" : ""), col)); }
+  while (hands.length < 2) hands.push(cell());
+  const layerCells = sk => { const out = [...run.lv.keys()].filter(id => SLOT_OF[id] === sk).map(id => cell(byId(id).power, byId(id).color)); while (out.length < CAP[sk]) out.push(cell()); return out; };
+  const armor = Object.keys(BODY).map(b => { const g = [...equipped].find(id => PIECE[id].body === b); return `<span class="grp sub"><em>${BODY[b].label}</em>${g ? cell(PIECE[g].item, SETS[PIECE[g].set].color) : cell()}</span>`; }).join("");
+  const lens = run.lens.map(l => cell(EL[l.el].name + " Lens Lv " + l.lv, EL[l.el].color, EL[l.el].name + (l.lv > 1 ? " II" : ""))); while (lens.length < LENS_MAX) lens.push(cell());
+  return `<div class="slots">${grp("Hands", hands)}${grp("Speakers", layerCells("speakers"))}${grp("Core", layerCells("core"))}${grp("Forearm", layerCells("forearm"))}${grp("Lenses", lens)}</div><div class="slots">${armor}</div>`;
 }
 let choiceState = null, idleTimer = null;
 function showChoices(kind) {
@@ -1700,10 +1758,11 @@ function showChoices(kind) {
   const head = kind === "start" ? ["Pick your opening layer", "The Rig starts with only the base beat. Each pick adds a layer to the song and a weapon to the Rig. New layers start as a simple part and get busier as they level up."]
     : kind === "green" ? ["Green Room", "Tune up before the next room."]
     : kind === "elite" ? ["Elite reward", "Set pieces are more likely after tough fights."]
-    : ["Room clear", "Pick one. New layers come in on the next bar line."];
+    : ["Room clear", "Pick one, or take the last card to skip. New layers come in on the next bar line."];
   const cap = layerCap();
   showScreen(`<div class="panel">
     <div><h2>${head[0]}</h2><p>${head[1]} Layers ${run.lv.size}/${cap} (${BAND[cap]}).</p></div>
+    ${kind !== "start" ? slotStrip() : ""}
     <div class="cards">${cards.map(cardHTML).join("") || "<p>Nothing left to offer.</p>"}</div>
     <div class="row-actions">${run.rerolls > 0 ? `<button class="btn small" id="rerollBtn" type="button">Reroll (${run.rerolls} left) <kbd>R</kbd></button>` : ""}
     ${!cards.length ? `<button class="btn small" id="skipBtn" type="button">Continue</button>` : ""}<span id="idleNote" style="font-size:.8rem;color:var(--mute)"></span></div></div>`);
@@ -1726,7 +1785,7 @@ function unequip(id) {
 }
 function applyCard(card) {
   for (const r of plan(card)) {
-    if (r.kind === "layer") { run.lv.delete(r.id); stemOff(r.id); if (run.el.has(r.id)) { run.el.delete(r.id); elementSound(r.id, null); } ambUpdate(); }
+    if (r.kind === "layer") { run.lv.delete(r.id); stemOff(r.id); }
     else unequip(r.id);
   }
   if (card.type === "new") { run.lv.set(card.id, 1); stemOn(card.id); }
@@ -1735,29 +1794,35 @@ function applyCard(card) {
   else if (card.type === "hp") { P.maxHp += 20; P.hp = Math.min(P.maxHp, P.hp + 20); run.sub = (run.sub || 0) + 1; if (nodes) nodes.kick.volume.rampTo(2 * run.sub, 0.5); }
   else if (card.type === "amp") { run.vol = (run.vol || 0) + 1; if (nodes) nodes.master.volume.rampTo(-6 + 1.5 * run.vol, 0.5); }
   else if (card.type === "tempo") { run.tempo = (run.tempo || 0) + 1; setTempo(); }
-  else if (card.type === "elem") { run.el.set(card.id, card.el); elementSound(card.id, card.el); ambUpdate(); }
+  else if (card.type === "lens") { const l = run.lens.find(x => x.el === card.el); if (l) l.lv++; else run.lens.push({ el: card.el, lv: 1 }); lensSound(); ambUpdate(); }
+  else if (card.type === "tip") run.tips += tipAmt();
+  else if (card.type === "patch") heal(patchAmt());
   if (card.type === "gear" && readySet()) { const id = readySet(); setTimeout(() => banner("Full " + SETS[id].name + " set", specialLabel(id) + " unlocked: press X"), 600); }
 }
 // Non-layer pickups change the mix instead of adding a part: volume, kick depth and tempo
 const actBpm = () => (run && run.room >= 7 ? 134 : 128) + 4 * ((run && run.tempo) || 0);
 function setTempo() { baseBpm = actBpm(); if (nodes && !specialPhase && !specialPending) Tone.Transport.bpm.rampTo(baseBpm, 1); }
-function resetMix() { if (!nodes) return; nodes.master.volume.rampTo(-6, 0.5); nodes.kick.volume.rampTo(0, 0.5); for (const id of EL_WEAPONS) elementSound(id, null); if (amb) for (const k of ["fireG", "coldG", "ltG"]) amb[k].gain.rampTo(0, 0.8); }
-// Each element adds a parallel effect on that weapon's own layer, so you hear which weapon carries it
-function elementSound(id, el) {
-  const s = byId(id); if (!nodes || !s.vol) return;
-  s.elFx = s.elFx || {};
-  for (const k in s.elFx) s.elFx[k].gain.rampTo(0, 0.3);
-  if (!el) return;
-  if (!s.elFx[el]) {
-    const g = new Tone.Gain(0).connect(nodes.duckBus);
-    const chain = el === "fire" ? [new Tone.Distortion({ distortion: 0.6, oversample: "2x" }), new Tone.Filter({ type: "lowpass", frequency: 3600 })]
+function resetMix() { if (!nodes) return; nodes.master.volume.rampTo(-6, 0.5); nodes.kick.volume.rampTo(0, 0.5); if (lensFx) for (const k in lensFx.g) lensFx.g[k].gain.rampTo(0, 0.5); if (amb) for (const k of ["fireG", "coldG", "ltG"]) amb[k].gain.rampTo(0, 0.8); }
+// Lenses colour every weapon layer: the weapon stems feed a shared lens bus with one effect per element
+let lensFx = null;
+function lensSound() {
+  if (!nodes) return;
+  if (!lensFx) {
+    lensFx = { in: new Tone.Gain(1), g: {} };
+    for (const el of Object.keys(EL)) {
+      const g = new Tone.Gain(0).connect(nodes.duckBus);
+      const chain = el === "fire" ? [new Tone.Distortion({ distortion: 0.6, oversample: "2x" }), new Tone.Filter({ type: "lowpass", frequency: 3600 })]
       : el === "cold" ? [new Tone.Filter({ type: "highpass", frequency: 900 }), new Tone.FeedbackDelay({ delayTime: "8n.", feedback: 0.5, wet: 1 }), new Tone.Filter({ type: "lowpass", frequency: 7000 })]
       : [new Tone.Distortion({ distortion: 1, oversample: "none" }), new Tone.Filter({ type: "highpass", frequency: 2200 }), new Tone.Tremolo(16, 0.9).start()];
-    s.vol.chain(...chain, g);
-    s.elFx[el] = g;
+      lensFx.in.chain(...chain, g);
+      lensFx.g[el] = g;
+    }
   }
-  s.elFx[el].gain.rampTo(el === "fire" ? 0.55 : el === "cold" ? 0.7 : 0.45, 0.5);
+  for (const id of EL_WEAPONS) { const s = byId(id); if (s.vol && !s.lensLinked) { s.vol.connect(lensFx.in); s.lensLinked = true; } }
+  for (const el of Object.keys(EL)) { const lv = lensLv(el), base = el === "fire" ? 0.55 : el === "cold" ? 0.7 : 0.45; lensFx.g[el].gain.rampTo(lv ? base * (lv >= 2 ? 1.3 : 1) : 0, 0.5); }
 }
+const tipAmt = () => 10 + 2 * ((run && run.room) || 0);
+const patchAmt = () => Math.round(P.maxHp * 0.1);
 function afterPick() {
   if (run.room === 0) { startRoom("fight"); return; }
   showDoors();
@@ -1850,7 +1915,7 @@ function showSummary(r) {
 function togglePause() {
   if (!run || run.mode !== "fight") return;
   paused = !paused;
-  if (paused) { Tone.Transport.pause(); if (amb) amb.bus.gain.rampTo(0, 0.2); showScreen(`<div class="panel" style="width:min(420px,100%)"><h2>Paused</h2><div class="row-actions"><button class="btn primary" id="resumeBtn" type="button">Resume <kbd>Esc</kbd></button><button class="btn" id="quitBtn" type="button">End run</button></div></div>`);
+  if (paused) { Tone.Transport.pause(); if (amb) amb.bus.gain.rampTo(0, 0.2); showScreen(`<div class="panel" style="width:min(640px,100%)"><h2>Paused</h2>${slotStrip()}<div class="row-actions"><button class="btn primary" id="resumeBtn" type="button">Resume <kbd>Esc</kbd></button><button class="btn" id="quitBtn" type="button">End run</button></div></div>`);
     document.getElementById("resumeBtn").addEventListener("click", togglePause);
     document.getElementById("quitBtn").addEventListener("click", () => { paused = false; Tone.Transport.start(); if (amb) amb.bus.gain.rampTo(1, 0.4); hideScreen(); run.mode = "fight"; endRun(false); }); }
   else { Tone.Transport.start(); if (amb) amb.bus.gain.rampTo(1, 0.4); hideScreen(); }
@@ -1862,7 +1927,23 @@ function banner(t, sub) { const b = document.getElementById("banner"); b.innerHT
 // Simulation (fixed 120 Hz steps so fast bullets and dashes never skip a hit)
 // =====================================================================
 let hitFlash = 0;
-function damagePlayer(dmg, src) {
+// World 1 elites carry the Mute's touch: their hits silence one of your layers for 4 bars
+function silence() {
+  const pool = layers().filter(s => s.wanted && !s.silenced && s.id !== "rock");
+  if (!pool.length) return;
+  const v = pool[Math.floor(Math.random() * pool.length)];
+  const curBar = Math.floor(Tone.Transport.ticks / (Tone.Transport.PPQ * 4));
+  v.silenced = curBar + 5; v.dropped = true;
+  const t = nextLine("8n"); ramp(v.fader.gain, 0, t, 0.04); setState(v, "dropped", t);
+  banner("Silenced: " + v.power, "Back in 4 bars");
+}
+function unsilence(time, absBar) {
+  for (const s of layers()) if (s.silenced && absBar >= s.silenced) {
+    s.silenced = 0;
+    if (recoverBar < 0 && s.dropped) { s.dropped = false; if (s.wanted) { ramp(s.fader.gain, 1, time, 0.012, time); setState(s, "on", time); } }
+  }
+}
+function damagePlayer(dmg, src, sil) {
   if (invulnerable()) return false;
   const now = performance.now();
   const taken = dmg * (waistPiece() ? 0.85 : 1);
@@ -1871,6 +1952,7 @@ function damagePlayer(dmg, src) {
   if (nodes) nodes.hitfx.triggerAttackRelease("8n", Tone.now() + 0.01, 0.9);
   shake(7); hitFlash = 1;
   dropout(src === "wave" ? 2 : 1);
+  if (sil) silence();
   if (P.hp <= 0) { P.hp = 0; endRun(false); }
   return true;
 }
@@ -1939,16 +2021,18 @@ function update(dt) {
     if (!e.alive || !e.on) continue;
     e.flash = Math.max(0, e.flash - dt); e.wob += dt;
     const a = Math.atan2(P.y - e.y, P.x - e.x), d = Math.hypot(P.x - e.x, P.y - e.y);
-    const edt = now < (e.stunUntil || 0) ? 0 : now < (e.chillUntil || 0) ? dt * 0.75 : dt;
-    if (e.burn && now < e.burnUntil) { e.burnAcc = (e.burnAcc || 0) + BURN_DPS * e.burn * dt; if (e.burnAcc >= 4) { const b = e.burnAcc; e.burnAcc = 0; hurt(e, b, "#ff7a3c"); } } else if (e.burn) e.burn = 0;
+    const edt = now < (e.stunUntil || 0) ? 0 : now < (e.chillUntil || 0) ? dt * (1 - (e.chillK || 0.25)) : dt;
+    if (e.burn && now < e.burnUntil) { e.burnAcc = (e.burnAcc || 0) + (e.burnDps || BURN_DPS) * e.burn * dt; if (e.burnAcc >= 4) { const b = e.burnAcc; e.burnAcc = 0; hurt(e, b, "#ff7a3c"); } } else if (e.burn) e.burn = 0;
     if (!e.alive) continue;
     if (e.dash > 0) { e.dash -= edt; e.x += e.dvx * edt; e.y += e.dvy * edt; }
     else if (e.type === "hiss") { e.x += Math.cos(a + Math.sin(e.wob * 3) * 0.4) * e.spd * edt; e.y += Math.sin(a + Math.sin(e.wob * 3) * 0.4) * e.spd * edt; }
+    else if (e.type === "ticker") { }
+    else if (e.type === "squeal") { const k = d > 360 ? 1 : d < 280 ? -1 : 0; e.x += (Math.cos(a) * k + Math.cos(a + 1.57) * 0.5 * (e.phase ? 1 : -1)) * e.spd * edt; e.y += (Math.sin(a) * k + Math.sin(a + 1.57) * 0.5 * (e.phase ? 1 : -1)) * e.spd * edt; }
     else if (e.type === "crackle") { const k = d > 280 ? 1 : d < 200 ? -1 : 0; e.x += (Math.cos(a) * k + Math.cos(a + 1.57) * 0.4 * (e.phase ? 1 : -1)) * e.spd * edt; e.y += (Math.sin(a) * k + Math.sin(a + 1.57) * 0.4 * (e.phase ? 1 : -1)) * e.spd * edt; }
     else if (e.type === "mute") { const tx = AW / 2 + Math.cos(e.wob * 0.5) * AW * 0.28, ty = AH * 0.25 + Math.sin(e.wob * 0.8) * 50; e.x += (tx - e.x) * edt; e.y += (ty - e.y) * edt; }
     else { e.x += Math.cos(a) * e.spd * edt; e.y += Math.sin(a) * e.spd * edt; }
     e.x = clamp(e.x, e.r, AW - e.r); e.y = clamp(e.y, e.r, AH - e.r);
-    if (d < e.r * 0.85 + HURT + 3) damagePlayer(e.dmg, "touch");
+    if (d < e.r * 0.85 + HURT + 3) damagePlayer(e.dmg, "touch", e.silencer);
   }
   for (let i = 0; i < enemies.length; i++) for (let j = i + 1; j < enemies.length; j++) {
     const a = enemies[i], b = enemies[j]; if (!a.alive || !b.alive) continue;
@@ -1971,13 +2055,18 @@ function update(dt) {
   for (const b of bullets) {
     b.life -= dt; b.x += b.vx * dt; b.y += b.vy * dt;
     if (b.x < -20 || b.y < -20 || b.x > AW + 20 || b.y > AH + 20) b.life = 0;
-    if (b.life > 0 && Math.hypot(b.x - P.x, b.y - P.y) < b.r * 0.7 + HURT) { if (damagePlayer(b.dmg, "bullet")) b.life = 0; }
+    if (b.life > 0 && Math.hypot(b.x - P.x, b.y - P.y) < b.r * 0.7 + HURT) { if (damagePlayer(b.dmg, "bullet", b.sil)) b.life = 0; }
   }
   bullets = bullets.filter(b => b.life > 0);
   for (const f of fx) {
     f.t += dt;
     if (f.k === "spark") { f.x += f.vx * dt; f.y += f.vy * dt; f.vx *= Math.pow(0.0066, dt); f.vy *= Math.pow(0.0066, dt); }
     if (f.follow) { f.x = P.x; f.y = P.y; }
+    if (f.k === "boom" && !f.done && f.t >= f.fuse) {
+      f.done = true; shake(5);
+      if (Math.hypot(P.x - f.x, P.y - f.y) < f.r + HURT) damagePlayer(f.dmg, "boom", f.sil);
+      if (f.act2) { const off = Math.random(); for (let i = 0; i < 6; i++) { curSil = f.sil; eBullet(f.x, f.y, off + i * Math.PI / 3, 200, 8, f.color, 6); } curSil = false; }
+    }
     if (f.k === "wave") {
       f.r += 230 * dt;
       const d = Math.hypot(P.x - f.x, P.y - f.y);
@@ -2032,10 +2121,12 @@ function draw(dt) {
       ctx.strokeStyle = hexA("#b18cff", 0.35); ctx.lineWidth = 16; ctx.beginPath(); ctx.arc(f.x, f.y, f.r, f.gap + f.gw / 2, f.gap - f.gw / 2 + Math.PI * 2); ctx.stroke();
       ctx.strokeStyle = hexA("#ffffff", 0.9); ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(f.x, f.y, f.r, f.gap + f.gw / 2, f.gap - f.gw / 2 + Math.PI * 2); ctx.stroke();
     }
+    else if (f.k === "boom") { if (!f.done) { const k2 = f.t / f.fuse; ctx.fillStyle = hexA(f.color, 0.1 + 0.25 * k2); ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, 7); ctx.fill(); ctx.strokeStyle = hexA(f.color, 0.9); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(f.x, f.y, f.r * k2, 0, 7); ctx.stroke(); } else { const k3 = (f.t - f.fuse) / (f.life - f.fuse); ctx.fillStyle = hexA("#ffffff", 0.5 * (1 - k3)); ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (0.8 + 0.3 * k3), 0, 7); ctx.fill(); } }
     else if (f.k === "slam") { ctx.fillStyle = hexA(f.color, 0.35 * (1 - k)); ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (0.4 + 0.6 * k), 0, 7); ctx.fill(); }
   }
   for (const e of enemies) {
     if (!e.alive || !e.on) continue;
+    if (e.tele && e.type === "squeal") { const a2 = Math.atan2(P.y - e.y, P.x - e.x); ctx.strokeStyle = hexA(e.color, 0.35 + 0.4 * beatPulse); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + Math.cos(a2) * 900, e.y + Math.sin(a2) * 900); ctx.stroke(); }
     if (e.tele && (e.type === "clipper" || e.type === "overdrive")) { ctx.strokeStyle = hexA(e.color, 0.55); ctx.lineWidth = 2; ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + Math.cos(e.lock) * 260, e.y + Math.sin(e.lock) * 260); ctx.stroke(); ctx.setLineDash([]); }
   }
 
@@ -2051,11 +2142,15 @@ function draw(dt) {
     const R = e.r;
     if (e.type === "hiss") { ctx.rotate(a); ctx.moveTo(R, 0); ctx.lineTo(-R, R * 0.8); ctx.lineTo(-R * 0.5, 0); ctx.lineTo(-R, -R * 0.8); }
     else if (e.type === "crackle") { ctx.rotate(e.wob * 2); ctx.moveTo(R, 0); ctx.lineTo(0, R); ctx.lineTo(-R, 0); ctx.lineTo(0, -R); }
+    else if (e.type === "pop") { ctx.arc(0, 0, R * (0.9 + 0.12 * Math.sin(e.wob * 10)), 0, 7); }
+    else if (e.type === "ticker") { ctx.rotate(e.rot); ctx.rect(-R * 0.8, -R * 0.8, R * 1.6, R * 1.6); ctx.moveTo(R * 0.8, -R * 0.2); ctx.lineTo(R * 1.35, -R * 0.2); ctx.lineTo(R * 1.35, R * 0.2); ctx.lineTo(R * 0.8, R * 0.2); }
+    else if (e.type === "squeal") { ctx.rotate(a); ctx.moveTo(R * 1.4, 0); ctx.lineTo(-R * 0.8, R * 0.7); ctx.lineTo(-R * 0.8, -R * 0.7); }
     else if (e.type === "clipper") { ctx.rotate(e.tele || e.dash > 0 ? e.lock : a); ctx.moveTo(R * 1.2, 0); ctx.lineTo(-R, R); ctx.lineTo(-R * 0.4, 0); ctx.lineTo(-R, -R); }
     else { const sides = e.type === "drone" ? 6 : e.type === "overdrive" ? 8 : 10; ctx.rotate(e.wob * (e.boss ? 0.4 : 0.8)); for (let i = 0; i < sides; i++) { const ang = i / sides * Math.PI * 2, rr2 = R * (e.boss ? (i % 2 ? 0.88 : 1) : 1); ctx.lineTo(Math.cos(ang) * rr2, Math.sin(ang) * rr2); } }
     ctx.closePath(); ctx.fill(); ctx.stroke();
     if (e.tele && (e.type === "crackle" || e.type === "drone" || e.type === "mute")) { ctx.strokeStyle = hexA(e.color, 0.8); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, R + 6 + 6 * beatPulse, 0, 7); ctx.stroke(); }
     ctx.strokeStyle = hexA(e.color, 0.45); ctx.lineWidth = 1;
+    if (e.silencer) { ctx.strokeStyle = hexA("#d6d0ff", 0.55 + 0.3 * beatPulse); ctx.lineWidth = 2; ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.arc(0, 0, R + 9, 0, 7); ctx.stroke(); ctx.setLineDash([]); ctx.beginPath(); ctx.moveTo(-R * 0.5, -R * 0.5); ctx.lineTo(R * 0.5, R * 0.5); ctx.stroke(); }
     const yy = Math.sin(e.wob * 9) * R * 0.6; ctx.beginPath(); ctx.moveTo(-R * 0.6, yy); ctx.lineTo(R * 0.6, yy); ctx.stroke();
     ctx.restore();
     if (!e.boss && e.hp < e.maxHp) { ctx.fillStyle = "#2f2a44"; ctx.fillRect(e.x - e.r, e.y - e.r - 8, e.r * 2, 3); ctx.fillStyle = e.color; ctx.fillRect(e.x - e.r, e.y - e.r - 8, e.r * 2 * Math.max(0, e.hp / e.maxHp), 3); }
@@ -2197,9 +2292,9 @@ function hud() {
   setHTML("specialBtn", (!rid ? `Set special · ${bestSetCount()}/7` : specialPhase === "windup" ? "Time slowing..." : specialPhase === "solo" ? `${label}!` : specialPending ? "On the next bar" : cd > 0 ? `Recharging ${Math.ceil(cd / 1000)} s` : `${label} ready`) + " <kbd>X</kbd>");
   let lo = "";
   const order = [...run.lv.keys()].sort((a, b) => byId(a).order - byId(b).order);
-  for (const id of order) { const s = byId(id); lo += `<span class="chip ${s.state}" style="--c:${s.color}"><i></i><b>${s.power}</b><span>Lv ${run.lv.get(id)}${s.state === "dropped" ? " · dropout" : s.state === "queued" ? " · next bar" : ""}</span></span>`; }
+  for (const id of order) { const s = byId(id); lo += `<span class="chip ${s.state}" style="--c:${s.color}"><i></i><b>${s.power}</b><span>Lv ${run.lv.get(id)}${s.silenced ? " · silenced" : s.state === "dropped" ? " · dropout" : s.state === "queued" ? " · next bar" : ""}</span></span>`; }
   for (let i = run.lv.size; i < layerCap(); i++) lo += `<span class="chip empty"><b>Open layer</b></span>`;
-  for (const sid in SETS) { const k = membersOf(sid).size; if (k) lo += `<span class="chip gear on" style="--c:${SETS[sid].color}"><i></i><b>${SETS[sid].name}</b><span>${k}/7${fullSet === sid ? " · bonus" : ""}</span></span>`; }
+  for (const sid in SETS) { const k = membersOf(sid).size; if (k) lo += `<span class="chip gear on" style="--c:${SETS[sid].color}"><i></i><b>${SETS[sid].name}</b><span>${k}/7${setTier(sid) ? " · +" + Math.round(setTier(sid) * 100) + "% area" : ""}${fullSet === sid ? " · bonus" : ""}</span></span>`; }
   setHTML("loadout", lo);
 }
 function drawClock(step) {
@@ -2222,7 +2317,7 @@ document.addEventListener("keydown", e => {
   }
   if (!screenEl.hidden) {
     const n = +e.key;
-    if (n >= 1 && n <= 3) { const c = screenEl.querySelectorAll(".card")[n - 1]; if (c) { e.preventDefault(); c.click(); } }
+    if (n >= 1 && n <= 4) { const c = screenEl.querySelectorAll(".card")[n - 1]; if (c) { e.preventDefault(); c.click(); } }
     else if (e.code === "KeyR") { const r = document.getElementById("rerollBtn"); if (r) r.click(); }
     else if (e.code === "Enter" && !(e.target.closest && e.target.closest("button"))) { const p = screenEl.querySelector(".btn.primary"); if (p) { e.preventDefault(); p.click(); } }
   }
@@ -2258,7 +2353,7 @@ showHub();
 requestAnimationFrame(frame);
 document.addEventListener("visibilitychange", () => { if (document.hidden && run && run.mode === "fight" && !paused) togglePause(); });
 
-window.__game = { get run() { return run; }, get enemies() { return enemies; }, P, STEMS, byId, newRun, startAudio, startRoom, showChoices, pick, equipped, applyCard, save, SETS, PIECE, get bpm() { return Tone.Transport.bpm.value; }, get specialPhase() { return specialPhase; }, get specialSet() { return specialSet; }, triggerSpecial, endRun, membersOf };
+window.__game = { get run() { return run; }, silence, slotStrip, buildRoom, get fx() { return fx; }, damagePlayer, get enemies() { return enemies; }, P, STEMS, byId, newRun, startAudio, startRoom, showChoices, pick, equipped, applyCard, save, SETS, PIECE, get bpm() { return Tone.Transport.bpm.value; }, get specialPhase() { return specialPhase; }, get specialSet() { return specialSet; }, triggerSpecial, endRun, membersOf };
 })();
 </script>
 
