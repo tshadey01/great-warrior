@@ -1466,7 +1466,10 @@ function ensureSolo(id) {
   const [v, made] = captureNodes(() => [mkVoice(r.soloOut, SETS[id].special.voice), mkVoice(r.soloOut, SETS[id].special.voiceB)]);
   r.I.solo = v; r.made.push(...made);
 }
-function dropSet(id) { const r = RT[id]; if (!r) return; delete RT[id]; try { r.out.disconnect(); r.soloOut.disconnect(); } catch (e) {} setTimeout(() => killNodes(r.made), 400); }
+// Dropping a set must free everything it made, including chord voices Tone created later while it played (those were
+// never captured, kept running after the run ended and piled up run after run: the "first run fine, later runs glitch" bug).
+function dropSet(id) { const r = RT[id]; if (!r) return; delete RT[id]; try { r.out.disconnect(); r.soloOut.disconnect(); } catch (e) {}
+  setTimeout(() => { killNodes(r.made); for (const [k, v] of Object.entries(r.I)) { if (k === "solo" || !v || typeof v.dispose !== "function") continue; try { v.dispose(); } catch (e) {} } }, 400); }
 function wireSet(id, on) {
   const r = RT[id]; if (!r || r.wired === on) return;
   r.wired = on;
