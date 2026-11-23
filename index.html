@@ -347,8 +347,10 @@ html { font-size: calc(16px * var(--ui, 1)); }
 // Ask the browser for a bigger audio buffer ("playback" instead of "interactive") before Tone.js creates its context.
 // The game loop and the music share one page; the small default buffer crackled and skipped on busy machines.
 // 44.1 kHz instead of the usual 48 kHz costs nothing audible and ~8% less audio work; Lighter audio drops to 32 kHz (from the next load)
-function liteRate() { try { const sv = JSON.parse(localStorage.getItem("gw-gig-run-v1") || "{}"); return sv.opts && sv.opts.lite ? 32000 : 44100; } catch (e) { return 44100; } }
-(() => { const N = window.AudioContext; if (!N) return; try { class PlaybackAudioContext extends N { constructor(o) { super(Object.assign({}, o || {}, { latencyHint: "playback", sampleRate: liteRate() })); } } window.AudioContext = PlaybackAudioContext; } catch (e) {} })();
+// Default 32 kHz: about 30% less audio work than 44.1 kHz, which keeps headroom for busy PCs, browsers that cap CPU
+// (Opera GX, Edge efficiency mode) and high-polling mice. "High quality audio" in Options switches to 44.1 kHz on reload.
+function liteRate() { try { const sv = JSON.parse(localStorage.getItem("gw-gig-run-v1") || "{}"); return sv.opts && sv.opts.hq && !sv.opts.lite ? 44100 : 32000; } catch (e) { return 32000; } }
+(() => { const N = window.AudioContext; if (!N) return; try { class PlaybackAudioContext extends N { constructor(o) { super(Object.assign({}, o || {}, { latencyHint: 0.08, sampleRate: liteRate() })); } } window.AudioContext = PlaybackAudioContext; } catch (e) {} })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script>
@@ -357,6 +359,9 @@ function liteRate() { try { const sv = JSON.parse(localStorage.getItem("gw-gig-r
 // A bigger audio buffer and scheduling lookahead, set before any audio node exists: the game loop and the music
 // share the main thread, and the default "interactive" setting crackled and skipped on busy or slower machines.
 try { Tone.context.lookAhead = 0.2; } catch (e) {}
+// With a bigger output buffer the sound reaches the speakers later than the audio clock says, so visuals synced with
+// Tone.Draw wait for the same delay and attacks still land on the notes you hear.
+try { const D = Tone.Draw, ds = D.schedule.bind(D); D.expiration = 0.4; D.schedule = (cb, t) => { const raw = Tone.context.rawContext, lat = Math.min(0.25, raw.outputLatency || raw.baseLatency || 0); return ds(cb, t + (lat > 0.02 ? lat : 0)); }; } catch (e) {}
 // Filters without the four always-running Signals that Tone.Filter keeps (frequency, Q, gain, detune): every Signal is a
 // ConstantSourceNode the audio thread renders all the time. 12 dB/oct filters use Tone.BiquadFilter's plain AudioParams instead.
 function LF(o, type) {
@@ -1610,8 +1615,10 @@ const active = id => byId(id).state === "on";
 
 // Some browsers keep the audio clock suspended after the first click, which froze the run until a pause.
 // Resume it on any click or key press, and restart the transport if it ever stalls mid-run.
+let ensureT = 0;
 function ensureAudio() {
   if (!playing) return;
+  const now = performance.now(); if (now - ensureT < 250) return; ensureT = now;
   try { if (Tone.context.state !== "running") Tone.context.resume(); } catch (e) {}
   if (!paused && Tone.Transport.state !== "started") Tone.Transport.start();
 }
@@ -1755,7 +1762,8 @@ function optionsHTML() { const o = OPT(); const vol = (k, name) => `<label class
   return `<div class="opts vols">${vol("vMaster", "Master")}${vol("vMusic", "Music")}${vol("vSfx", "Effects and ambience")}</div><div class="opts">
   <label><input type="checkbox" data-opt="dmg" ${o.dmg ? "checked" : ""}> Floating damage numbers</label>
   <label><input type="checkbox" data-opt="calm" ${o.calm ? "checked" : ""}> Reduce flashing and pulsing</label>
-  <label title="Turns off the reverb tail and lens ambience and gives the music a bigger buffer. Helps when streaming or on older PCs."><input type="checkbox" data-opt="lite" ${o.lite ? "checked" : ""}> Lighter audio (streaming, older PCs; fully applies after a page reload)</label>
+  <label title="Renders the music at 44.1 kHz instead of 32 kHz: a little more sparkle on cymbals, about 40% more audio work. Applies after a page reload."><input type="checkbox" data-opt="hq" ${o.hq ? "checked" : ""}> High quality audio (strong PCs; applies after a page reload)</label>
+  <label title="Turns off the reverb tail and lens ambience and gives the music a bigger buffer. Helps when streaming or on older PCs."><input type="checkbox" data-opt="lite" ${o.lite ? "checked" : ""}> Lighter audio (streaming, older PCs)</label>
   <label>Screen shake <input type="range" min="0" max="1" step="0.25" value="${o.shake}" data-opt="shake"><output>${Math.round(o.shake * 100)}%</output></label>
   <label>UI size <input type="range" min="0.8" max="1.3" step="0.05" value="${o.ui}" data-opt="ui"><output>${Math.round(o.ui * 100)}%</output></label></div>`; }
 function bindOptions(root) { root.querySelectorAll("[data-opt]").forEach(el => el.addEventListener("input", () => { const o = OPT(), k = el.dataset.opt; o[k] = el.type === "checkbox" ? el.checked : +el.value; const out = el.parentElement.querySelector("output"); if (out) out.textContent = Math.round(o[k] * 100) + "%"; persist(); applyOpts(); if (k === "ui") resize(); })); }
@@ -1776,8 +1784,9 @@ const setsUnlocked = () => Object.keys(SETS).filter(id => STARTER[id] ? !!(run &
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
 let AW = 1000, AH = 640;
 let view = { s: 1, ox: 0, oy: 0, dpr: 1, w: 0, h: 0 };
+let cvRect = { left: 0, top: 0 };
 function resize() {
-  const r = cv.getBoundingClientRect();
+  const r = cv.getBoundingClientRect(); cvRect = r;
   view.dpr = Math.min(2, window.devicePixelRatio || 1);
   view.w = r.width; view.h = r.height;
   cv.width = Math.round(r.width * view.dpr); cv.height = Math.round(r.height * view.dpr);
@@ -3206,8 +3215,12 @@ document.addEventListener("keydown", e => {
 });
 document.addEventListener("keyup", e => { if (KEYMAP[e.code]) keys.delete(KEYMAP[e.code]); });
 window.addEventListener("blur", () => keys.clear());
-function toWorld(cx, cy) { const r = cv.getBoundingClientRect(); return { x: (cx - r.left - view.ox) / view.s, y: (cy - r.top - view.oy) / view.s }; }
-cv.addEventListener("mousemove", e => { const w = toWorld(e.clientX, e.clientY); mouse.x = w.x; mouse.y = w.y; mouse.t = performance.now(); mouse.inside = true; });
+function toWorld(cx, cy) { const r = cvRect; return { x: (cx - r.left - view.ox) / view.s, y: (cy - r.top - view.oy) / view.s }; }
+// Mouse moves only store the position; it is converted once per frame. No layout reads or other work per event.
+let rawMouse = null;
+cv.addEventListener("mousemove", e => { rawMouse = rawMouse || {}; rawMouse.x = e.clientX; rawMouse.y = e.clientY; }, { passive: true });
+function takeMouse() { if (!rawMouse) return; const w = toWorld(rawMouse.x, rawMouse.y); rawMouse = null; mouse.x = w.x; mouse.y = w.y; mouse.t = performance.now(); mouse.inside = true; }
+window.addEventListener("scroll", () => { cvRect = cv.getBoundingClientRect(); }, { passive: true });
 cv.addEventListener("mouseleave", () => { mouse.inside = false; });
 cv.addEventListener("contextmenu", e => { if (run && run.mode === "fight") { e.preventDefault(); dash(); } });
 cv.addEventListener("touchstart", e => { if (!run || run.mode !== "fight") return; const t = e.changedTouches[0]; joy = { id: t.identifier, x0: t.clientX, y0: t.clientY, dx: 0, dy: 0, active: true }; e.preventDefault(); }, { passive: false });
@@ -3221,6 +3234,7 @@ $("pauseBtn").addEventListener("click", togglePause);
 let last = performance.now();
 function frame(ts) {
   const dt = Math.min(0.05, (ts - last) / 1000); last = ts;
+  takeMouse();
   if (run && run.mode === "fight" && !paused) {
     let left = dt * timeScale();
     while (left > 1e-6 && run && run.mode === "fight") { const h = Math.min(left, 1 / 120); update(h); left -= h; }
