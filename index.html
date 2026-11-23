@@ -1251,6 +1251,7 @@ const INVULN = 10000;
 let playing = false;
 const LV = id => (run && run.lv.get(id)) || 1;
 
+const SOLO_LIFT = { strings: 24, pads: 17, funk: 16, arp: 13, choir: 12 };   // dB each needs to match the flute when played alone
 function tick(time) {
   const ticks = Tone.Transport.getTicksAtTime(time);
   const abs = Math.round(ticks / (Tone.Transport.PPQ / 4));
@@ -1268,6 +1269,10 @@ function tick(time) {
   if (inBar === 0) unsilence(time, absBar);
 
   if (inBar === 0) {
+    // Background parts (strings, pads, arp...) measure 12-25 dB under the Sword's flute when heard alone. Early in a run they
+    // may be the whole band (Ranger opens with only the Comet Bow), so lift them toward lead level until the band fills out.
+    const band = layers().filter(s => s.wanted).length + equipped.size, share = [0, 1, 0.7, 0.45, 0.2][band] || 0;
+    for (const s of layers()) { const lift = Math.round((SOLO_LIFT[s.id] || 0) * share); if (s.lift !== lift) { s.lift = lift; const v = s.vol.volume; v.cancelScheduledValues(time); v.setValueAtTime(v.getValueAtTime(time), time); v.linearRampToValueAtTime(s.db + lift, time + 0.4); } }
     pilotNow = byId("rock").wanted;
     for (const id in SETS) setNow[id] = membersOf(id);
     specialBarLine(time, absBar);
@@ -2265,8 +2270,8 @@ function newRun() {
   enemies = []; shots = []; bullets = []; fx = []; texts = [];
   for (const s of STEMS) { s.silenced = 0; if (!s.base) stemOff(s.id, true); }
   equipped.clear(); for (const k in gearOrder) delete gearOrder[k];
-  specialPending = false; if (specialPhase === "solo") specialPhase = null; cooldownUntil = 0; invulnUntil = 0;
-  baseBpm = 128; if (nodes && !specialPhase) { Tone.Transport.bpm.cancelScheduledValues(Tone.now()); Tone.Transport.bpm.rampTo(baseBpm, 0.5); }
+  cooldownUntil = 0; invulnUntil = 0;
+  baseBpm = 128; resetAudio();
   resetMix();
   document.getElementById("hudTop").hidden = false; document.getElementById("hudBot").hidden = false;
   showPilots();
@@ -2500,6 +2505,30 @@ function restoreMix() {
   f.cancelScheduledValues(t); f.setValueAtTime(20000, t);
   nodes.master.volume.cancelScheduledValues(t); nodes.master.volume.rampTo(-6 + 1.5 * ((run && run.vol) || 0), 0.3);
   Tone.Transport.bpm.cancelScheduledValues(t); Tone.Transport.bpm.rampTo(baseBpm, 0.5);
+}
+// A new run must not inherit half-finished audio from the last one (special windup or solo, duel, ducking, silences, tempo ramps)
+function resetAudio() {
+  specialPending = false; specialPhase = null; specialAbort = false; specialSet = null; specialCrash = false;
+  fullSet = null; setEntry = false; mixLoud = false; recoverBar = -1; finale = null;
+  for (const s of STEMS) { s.silenced = 0; s.dropped = false; }
+  if (!nodes) return;
+  const t = Tone.now();
+  for (const g of [nodes.duckBus.gain, nodes.beatBus.gain]) { g.cancelScheduledValues(t); g.setValueAtTime(1, t); }
+  nodes.master.volume.cancelScheduledValues(t); nodes.master.volume.setValueAtTime(-6, t);
+  const f = nodes.slowLP.frequency; f.cancelScheduledValues(t); f.setValueAtTime(20000, t);
+  Tone.Transport.bpm.cancelScheduledValues(t); Tone.Transport.bpm.setValueAtTime(baseBpm, t);
+  for (const s of STEMS) { s.fader.gain.cancelScheduledValues(t); s.fader.gain.setValueAtTime(s.wanted ? 1 : 0, t); s.gate = s.wanted; s.state = s.wanted ? "on" : "off"; }
+  wdTicks = -1; audioWatchdog(Infinity);
+}
+// Once a second during a run: keep the audio clock running, and if the music clock has stalled, put the tempo back
+let wdT = 0, wdTicks = -1;
+function audioWatchdog(ts) {
+  if (!playing || paused || ts - wdT < 1000) return; wdT = ts === Infinity ? 0 : ts;
+  try { if (Tone.context.state !== "running") Tone.context.resume(); } catch (e) {}
+  if (Tone.Transport.state !== "started") { Tone.Transport.start(); wdTicks = -1; return; }
+  const tk = Tone.Transport.ticks;
+  if (run && tk === wdTicks && Tone.context.state === "running") { const t = Tone.now(); Tone.Transport.bpm.cancelScheduledValues(t); Tone.Transport.bpm.setValueAtTime(baseBpm, t); }
+  wdTicks = tk;
 }
 function resetMix() { if (!nodes) return; nodes.master.volume.rampTo(-6, 0.5); nodes.kick.volume.rampTo(0, 0.5); lensSound(true); if (amb) ambBeds({ fireG: 0, coldG: 0, ltG: 0 }); }
 // Lenses colour every weapon layer: the weapon stems feed a shared lens bus with one effect per element
@@ -3142,6 +3171,7 @@ function frame(ts) {
   }
   draw(dt);
   hud();
+  audioWatchdog(ts);
   requestAnimationFrame(frame);
 }
 applyOpts();
