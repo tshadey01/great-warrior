@@ -40,13 +40,27 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .hud.bottom { bottom: 0; padding-block: 0 10px; align-items: flex-end; }
 .hud > * { pointer-events: auto; }
 .box { background: rgba(16,14,24,.82); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; font-size: .82rem; }
-.hp { display: grid; gap: 4px; min-width: 170px; }
+.hp { display: grid; gap: 5px; min-width: 260px; padding: 8px 12px; }
+.hp .bar { height: 12px; border-radius: 6px; }
+.hud.top { display: grid; grid-template-columns: 1fr auto 1fr; }
+.hud.top .right { justify-self: end; }
+.hud.bottom .left { display: grid; gap: 8px; justify-items: start; }
 .hp .row { display: flex; justify-content: space-between; gap: 8px; font-family: var(--f-mono); font-size: .74rem; color: var(--mute); }
 .hp .row b { color: var(--ink); font-weight: 500; }
 .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
 .bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--hot), #ff8fae); transition: width .15s; }
 .bar.xp i { background: linear-gradient(90deg, var(--gold), #ffe3a3); }
 .bar.boss i { background: linear-gradient(90deg, #b18cff, var(--hot)); }
+.bosshud { position: absolute; left: 50%; top: 96px; transform: translateX(-50%); width: min(560px, calc(100% - 32px)); pointer-events: none; display: grid; gap: 4px; text-shadow: 0 1px 3px #000; }
+.bosshud .row { display: flex; gap: 10px; align-items: baseline; font-size: .8rem; color: var(--mute); }
+.bosshud .row b { font-family: var(--f-display); font-size: 1.05rem; color: var(--ink); letter-spacing: .04em; }
+.bosshud .row span:last-child { margin-left: auto; font-family: var(--f-mono); font-size: .72rem; }
+.bosshud .bbar { position: relative; height: 12px; background: rgba(16,14,24,.85); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.bosshud .bbar i { display: block; height: 100%; width: 100%; background: var(--bc, linear-gradient(90deg, #b18cff, var(--hot))); transition: width .15s; }
+.bosshud .bbar s { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,.7); text-decoration: none; }
+.bosshud.final .bbar i { background: #ffffff; animation: bosspulse .5s ease-in-out infinite alternate; }
+@keyframes bosspulse { from { opacity: .4; } to { opacity: 1; } }
+@media (max-width: 640px) { .bosshud { top: 118px; } }
 .mid { display: grid; gap: 4px; justify-items: center; text-align: center; }
 .mid .room { font-family: var(--f-display); font-weight: 700; letter-spacing: .04em; font-size: .9rem; }
 .map { display: flex; gap: 4px; }
@@ -139,12 +153,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .summary-big { font-family: var(--f-display); font-size: 2rem; font-weight: 700; color: var(--gold); }
 .lvup { color: var(--gold); font-weight: 600; }
 @media (max-width: 560px) {
-  .hp { min-width: 130px; }
+  .hp { min-width: 0; width: min(260px, 60vw); }
   .map i { width: 11px; height: 11px; font-size: 0; }
   .chip span { display: none; }
   .chip.empty { display: none; }
-  .hud.top { flex-wrap: nowrap; gap: 6px; }
-  .hud.top .hp { min-width: 0; flex: 1 1 0; }
+  .hud.top { gap: 6px; }
   .mid { flex: none; }
   .mid .map { display: none; }
   .mid .room { font-size: .78rem; }
@@ -159,15 +172,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
   <canvas id="cv" aria-label="Arena"></canvas>
 
   <div class="hud top" id="hudTop" hidden>
-    <div class="box hp">
-      <div class="row"><span>Hull</span><b id="hpTxt">100 / 100</b></div>
-      <div class="bar"><i id="hpBar"></i></div>
-      <div class="row"><span id="shieldTxt">Shield none</span><span id="layerTxt">Layers 0 / 3</span></div>
-    </div>
+    <div class="tl"></div>
     <div class="box mid">
       <span class="room" id="roomTxt">Room 1 · Act I</span>
       <div class="map" id="map"></div>
-      <div class="bar boss" id="bossWrap" hidden style="width:220px;max-width:50vw"><i id="bossBar"></i></div>
     </div>
     <div class="right">
       <span class="pill" id="modePill">Autopilot · 60%</span>
@@ -175,8 +183,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
     </div>
   </div>
 
+  <div class="bosshud" id="bossHud" hidden>
+    <div class="row"><b id="bossName">The Mute</b><span id="bossPhase">Phase 1 of 2</span><span id="bossHpTxt"></span></div>
+    <div class="bbar"><i id="bossBar"></i><s id="bossMark"></s></div>
+  </div>
+
   <div class="hud bottom" id="hudBot" hidden>
-    <div class="loadout" id="loadout"></div>
+    <div class="left">
+      <div class="loadout" id="loadout"></div>
+      <div class="box hp">
+        <div class="row"><span>Hull</span><b id="hpTxt">100 / 100</b></div>
+        <div class="bar"><i id="hpBar"></i></div>
+        <div class="row"><span id="shieldTxt">Shield none</span><span id="layerTxt">Layers 0 / 3</span></div>
+    </div>
+    </div>
     <div class="right">
       <div class="touchpad"><button class="btn small" id="dashBtn" type="button">Dash</button><button class="btn small" id="pauseBtn" type="button">Pause</button></div>
       <div class="box pips" id="pips"><i></i><i></i><i></i><i></i><span id="chordTxt" style="font-family:var(--f-mono);font-size:.74rem;color:var(--gold);margin-left:4px">Am</span></div>
@@ -187,10 +207,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
   <div class="screen" id="screen"></div>
 </div>
 
+<script>
+// Ask the browser for a bigger audio buffer ("playback" instead of "interactive") before Tone.js creates its context.
+// The game loop and the music share one page; the small default buffer crackled and skipped on busy machines.
+(() => { const N = window.AudioContext; if (!N) return; try { class PlaybackAudioContext extends N { constructor(o) { super(Object.assign({}, o || {}, { latencyHint: "playback" })); } } window.AudioContext = PlaybackAudioContext; } catch (e) {} })();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script>
 (() => {
 "use strict";
+// A bigger audio buffer and scheduling lookahead, set before any audio node exists: the game loop and the music
+// share the main thread, and the default "interactive" setting crackled and skipped on busy or slower machines.
+try { Tone.context.lookAhead = 0.2; } catch (e) {}
 // ===== Music data, gear sets and synth graph: carried over from the Sound Lab (v6 sets engine) =====
 const STEPS = 128;             // 8 bars of 16th notes
 const BAR = 16;
@@ -675,13 +703,10 @@ function build() {
   n.riser = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 1, decay: 0.05, sustain: 1, release: 0.1 } }).connect(riserBP);
   n.riser.volume.value = -14;
   // Gear sets: one bus per set (cohesion gain + muffle filter), instruments built by each set
-  for (const id in SETS) {
-    const bus = new Tone.Gain(0.45), lp = new Tone.Filter({ type: "lowpass", frequency: 2600, rolloff: -12 });
-    bus.chain(lp, new Tone.Volume(-4), master);
-    const I = SETS[id].build(bus);
-    I.solo = [mkVoice(master, SETS[id].special.voice), mkVoice(master, SETS[id].special.voiceB)];
+  n.setMaster = master;   // sets are built lazily by ensureSet() when their first piece is equipped
+  for (const id of []) {
+    const bus = null, lp = null, I = {};
     RT[id] = { bus, lp, I };
-    wrapSet(id, I);
   }
 
   // Base beat
@@ -828,8 +853,8 @@ defineSet({
     I.kick = new Tone.MembraneSynth({ pitchDecay: 0.04, octaves: 4, envelope: { attack: 0.001, decay: 0.28, sustain: 0 } }).connect(out);
     const snBP = new Tone.Filter({ type: "bandpass", frequency: 2000, Q: 0.8 }).connect(out);
     I.snare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.14, sustain: 0 } }).connect(snBP);
-    I.ride = new Tone.MetalSynth({ envelope: { attack: 0.001, decay: 0.25, release: 0.05 }, harmonicity: 5.1, modulationIndex: 20, resonance: 5000, octaves: 1 }).connect(out);
-    I.ride.volume.value = -26; I.ride.frequency.value = 300;
+    I.ride = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.09, sustain: 0 } }).connect(new Tone.Filter({ type: "highpass", frequency: 7000 }).connect(out));   // cheaper than a MetalSynth
+    I.ride.volume.value = -20;
     I.bass = new Tone.MonoSynth({ oscillator: { type: "triangle" }, filter: { Q: 1, type: "lowpass" }, envelope: { attack: 0.003, decay: 0.15, sustain: 0.5, release: 0.05 },
       filterEnvelope: { attack: 0.002, decay: 0.12, sustain: 0.3, baseFrequency: 300, octaves: 2 } }).connect(out);
     I.bass.volume.value = -4;
@@ -842,11 +867,11 @@ defineSet({
     I.voxF = mkFormant(voxIn, VOWEL.a, new Tone.Gain(4).connect(out));
     I.vox = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 3, spread: 25 }, envelope: { attack: 0.01, decay: 0.15, sustain: 0.6, release: 0.2 } }).connect(voxIn);
     I.vox.volume.value = -9;
-    const amp = new Tone.Distortion({ distortion: 0.75, oversample: "2x" }), cab = new Tone.Filter({ type: "lowpass", frequency: 3000 });
+    const amp = new Tone.Distortion({ distortion: 0.75, oversample: "none" }), cab = new Tone.Filter({ type: "lowpass", frequency: 3000 });
     amp.chain(cab, out);
     I.rhythm = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "sawtooth" }, envelope: { attack: 0.002, decay: 0.12, sustain: 0.35, release: 0.05 } }).connect(amp);
     I.rhythm.maxPolyphony = 6; I.rhythm.volume.value = -22;
-    const leadAmp = new Tone.Distortion({ distortion: 0.8, oversample: "2x" });
+    const leadAmp = new Tone.Distortion({ distortion: 0.8, oversample: "none" });
     leadAmp.chain(new Tone.Filter({ type: "lowpass", frequency: 3800 }), new Tone.FeedbackDelay({ delayTime: "8n", feedback: 0.25, wet: 0.2 }), out);
     I.lead = new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.005, decay: 0.2, sustain: 0.7, release: 0.15 }, portamento: 0.03 }).connect(new Tone.Vibrato(5.5, 0.04).connect(leadAmp));
     I.lead.volume.value = -20;
@@ -858,7 +883,7 @@ defineSet({
     if (has("drums")) {
       if (tight ? (inBar === 0 || inBar === 8 || (pilot && inBar === 10)) : inBar === 0) I.kick.triggerAttackRelease("C1", "8n", time, 1);
       if (tight ? (inBar === 4 || inBar === 12) : inBar === 8) I.snare.triggerAttackRelease(0.14, time, 0.9);
-      if (tight && inBar % 2 === 0) I.ride.triggerAttackRelease(300, "16n", time, inBar % 4 === 0 ? 0.6 : 0.35);
+      if (tight && inBar % 2 === 0) I.ride.triggerAttackRelease("16n", time, inBar % 4 === 0 ? 0.6 : 0.35);
     }
     if (has("bass")) {   // boogie: root, root, fifth, fifth, sixth, sixth, fifth, fifth
       const walk = [0, 0, 7, 7, 9, 9, 7, 7];
@@ -1117,6 +1142,11 @@ function tick(time) {
     }
     for (const id in SETS) {
       const r = RT[id], coh = setNow[id].size / SET_SIZE, loud = id === loudSet;
+      if (!r) continue;
+      const inUse = setNow[id].size > 0 || loud || specialSet === id && (specialPhase || specialPending);
+      wireSet(id, inUse);
+      r.idle = inUse ? 0 : r.idle + 1;
+      if (r.idle >= 2) { dropSet(id); continue; }   // nothing of this set worn for 2 bars: shut it down
       let g = loud ? 1.7 : pilotNow ? 0.85 + 0.15 * coh : 0.6 + 0.25 * coh;
       if (loudSet && !loud) g *= 0.35;
       const lp = loud ? 16000 : pilotNow ? 9000 : 1800 + 3200 * coh;
@@ -1223,7 +1253,7 @@ function tick(time) {
   if (soloSet) playSolo(step, inBar, absBar, c, d, time, E);
   for (const id in SETS) {
     const m = setNow[id];
-    if (!m || !m.size) continue;
+    if (!m || !m.size || !RT[id]) continue;
     SETS[id].play(RT[id].I, { step, inBar, bar, absBar, c, d, time, has: q => m.has(q),
       tight: pilotNow || m.size >= 4 || soloSet === id, pilot: pilotNow, full: fullSet === id,
       solo: soloSet === id, soloStart: soloSet === id && absBar === specialBar && inBar === 0 });
@@ -1231,6 +1261,45 @@ function tick(time) {
   Tone.Draw.schedule(() => drawClock(step), time);
 }
 // Wrap each set instrument so every note it plays also fires that piece's attack at the same moment
+// Build a set's instruments the first time it is needed, and keep it wired into the mix only while it has pieces on.
+// Unused sets used to run all their effects (delays, choruses, vibratos, distortion) the whole time, which overloaded the audio thread.
+// Tone.js keeps a constant-source node running for every parameter, whether or not the instrument is playing,
+// so a built set costs CPU forever. We record the raw audio nodes each set creates and stop them when it is put away.
+function captureNodes(fn) {
+  const B = (window.BaseAudioContext || window.AudioContext).prototype, saved = {}, made = [];
+  for (const k of Object.getOwnPropertyNames(B)) {
+    const dsc = Object.getOwnPropertyDescriptor(B, k);
+    if (!k.startsWith("create") || !dsc || typeof dsc.value !== "function" || k === "createBuffer" || k === "createPeriodicWave") continue;
+    saved[k] = dsc.value; B[k] = function (...a) { const n = saved[k].apply(this, a); made.push(n); return n; };
+  }
+  try { return [fn(), made]; } finally { for (const k in saved) B[k] = saved[k]; }
+}
+// stop the always-running sources (Tone still owns the wiring, so we leave the connections alone)
+function killNodes(list) { for (const n of list) { try { if (typeof n.stop === "function") n.stop(); } catch (e) {} } list.length = 0; }
+function ensureSet(id) {
+  if (!nodes || RT[id]) return RT[id];
+  const [r, made] = captureNodes(() => {
+    const bus = new Tone.Gain(0.45), lp = new Tone.Filter({ type: "lowpass", frequency: 2600, rolloff: -12 }), out = new Tone.Volume(-4);
+    bus.chain(lp, out);
+    const I = SETS[id].build(bus);
+    return { bus, lp, I, out, soloOut: new Tone.Gain(1), wired: false, idle: 0 };
+  });
+  r.made = made; RT[id] = r;
+  wrapSet(id, r.I);
+  return r;
+}
+// the special's two solo voices only exist while a special is coming or playing
+function ensureSolo(id) {
+  const r = RT[id]; if (!r || r.I.solo) return;
+  const [v, made] = captureNodes(() => [mkVoice(r.soloOut, SETS[id].special.voice), mkVoice(r.soloOut, SETS[id].special.voiceB)]);
+  r.I.solo = v; r.made.push(...made);
+}
+function dropSet(id) { const r = RT[id]; if (!r) return; delete RT[id]; try { r.out.disconnect(); r.soloOut.disconnect(); } catch (e) {} setTimeout(() => killNodes(r.made), 400); }
+function wireSet(id, on) {
+  const r = RT[id]; if (!r || r.wired === on) return;
+  r.wired = on;
+  if (on) { r.out.connect(nodes.setMaster); r.soloOut.connect(nodes.setMaster); } else { r.out.disconnect(); r.soloOut.disconnect(); }
+}
 function wrapSet(setId, I) {
   for (const k of Object.keys(I)) {
     const inst = I[k];
@@ -1255,6 +1324,7 @@ function triggerSpecial() {
   if (specialPending || specialPhase) return;
   if (performance.now() < cooldownUntil) return;
   specialSet = id; specialMode = equipped.has(SETS[id].special.two) ? "solo" : "duel";
+  ensureSolo(id);
   specialPending = true; cooldownUntil = performance.now() + cooldownMs();
 }
 function specialBarLine(time, absBar) {
@@ -1375,6 +1445,7 @@ function ensureAudio() {
   if (!paused && Tone.Transport.state !== "started") Tone.Transport.start();
 }
 ["pointerdown", "keydown", "touchstart"].forEach(ev => document.addEventListener(ev, ensureAudio, true));
+let ctxReady = false;
 async function startAudio() {
   if (playing) return;
   await Tone.start();
@@ -1796,17 +1867,17 @@ function ambInit() {
   const bus = new Tone.Gain(1).connect(nodes.duckBus);
   // fire: low ember roar + random pops
   const fireG = new Tone.Gain(0).connect(bus);
-  const roar = new Tone.Noise("brown").start(); roar.volume.value = -22; roar.chain(new Tone.Filter({ type: "lowpass", frequency: 420 }), fireG);
+  const roar = new Tone.Noise("brown"); roar.volume.value = -22; roar.chain(new Tone.Filter({ type: "lowpass", frequency: 420 }), fireG);
   const popF = new Tone.Filter({ type: "bandpass", frequency: 2600, Q: 1.2 }).connect(fireG);
   const pop = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01 } }).connect(popF); pop.volume.value = -8;
   // cold: band-passed pink noise whose pitch and level wander
   const coldG = new Tone.Gain(0).connect(bus);
   const windF = new Tone.Filter({ type: "bandpass", frequency: 600, Q: 2.2 });
   const windV = new Tone.Gain(0.5);
-  const wind = new Tone.Noise("pink").start(); wind.volume.value = -6; wind.chain(windF, windV, coldG);
+  const wind = new Tone.Noise("pink"); wind.volume.value = -6; wind.chain(windF, windV, coldG);
   // lightning: rain hiss + rumbles
   const ltG = new Tone.Gain(0).connect(bus);
-  const rain = new Tone.Noise("pink").start(); rain.volume.value = -24; rain.chain(new Tone.Filter({ type: "highpass", frequency: 3200 }), ltG);
+  const rain = new Tone.Noise("pink"); rain.volume.value = -24; rain.chain(new Tone.Filter({ type: "highpass", frequency: 3200 }), ltG);
   const rumbleF = new Tone.Filter({ type: "lowpass", frequency: 260 }).connect(ltG);
   const rumble = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.25, decay: 2.2, sustain: 0, release: 0.5 } }).connect(rumbleF); rumble.volume.value = -4;
   // stun crash bypasses the duck bus so it lands extra loud
@@ -1816,20 +1887,32 @@ function ambInit() {
   const boom = new Tone.MembraneSynth({ pitchDecay: 0.25, octaves: 5, envelope: { attack: 0.002, decay: 1.4, sustain: 0, release: 0.4 } }).connect(crashBus); boom.volume.value = 2;
   const boomTail = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.05, decay: 2.6, sustain: 0, release: 0.6 } });
   boomTail.chain(new Tone.Filter({ type: "lowpass", frequency: 320 }), crashBus); boomTail.volume.value = 4;
-  amb = { bus, fireG, pop, popF, coldG, windF, windV, ltG, rumble, crash, boom, boomTail, lastCrash: 0, lastRumble: 0 };
+  amb = { bus, fireG, pop, popF, coldG, windF, windV, ltG, rumble, crash, boom, boomTail, lastCrash: 0, lastRumble: 0, src: { fireG: roar, coldG: wind, ltG: rain }, lv: {} };
   return amb;
 }
 function elCount(el) { if (!run || !run.lens) return 0; let n = lensLv(el); if (el === "lightning" && run.lv && run.lv.has("arp") && active("arp")) n++; return n; }
-function ambUpdate() {
-  if (!nodes) return; if (!amb && !run) return; const a = ambInit();
+function ambUpdate(time) {
+  if (!nodes || !run) return;
   const lvl = n => n ? Math.min(1, 0.6 + 0.2 * n) : 0;
-  a.fireG.gain.rampTo(lvl(elCount("fire")), 1);
-  a.coldG.gain.rampTo(lvl(elCount("cold")), 1);
-  a.ltG.gain.rampTo(lvl(elCount("lightning")), 1);
+  const want = { fireG: lvl(elCount("fire")), coldG: lvl(elCount("cold")), ltG: lvl(elCount("lightning")) };
+  if (!amb && !want.fireG && !want.coldG && !want.ltG) return;
+  ambBeds(want, time);
+}
+// noise beds only run while their element is in the build
+function ambBeds(want, time) {
+  const a = ambInit(); if (!a) return;
+  const t = time || Tone.now();
+  for (const k of ["fireG", "coldG", "ltG"]) {
+    const v = want[k] || 0; if (a.lv[k] === v) continue;
+    a.lv[k] = v; const src = a.src[k];
+    if (v > 0 && src.state !== "started") src.start(t);
+    a[k].gain.cancelScheduledValues(t); a[k].gain.setValueAtTime(a[k].gain.getValueAtTime(t), t); a[k].gain.linearRampToValueAtTime(v, t + 1);
+    if (v === 0 && src.state === "started") src.stop(t + 1.1);
+  }
 }
 function ambTick(time, inBar) {
   if (!run || !nodes) return;
-  if (inBar === 0) ambUpdate();
+  if (inBar === 0) ambUpdate(time);
   if (!amb) return;
   const f = elCount("fire"), c = elCount("cold"), l = elCount("lightning");
   if (f && Math.random() < 0.18 + 0.06 * f) {          // pops land off the grid
@@ -1939,7 +2022,7 @@ function duel(e) {
   const t = Tone.now();
   if (nodes) { nodes.master.volume.cancelScheduledValues(t); nodes.master.volume.rampTo(-60, 0.08); }
   setTimeout(() => {   // the cut lands after a beat of silence
-    if (!run || run.mode !== "fight") { finale = null; return; }
+    if (!run || run.mode !== "fight") { finale = null; restoreMix(); return; }
     if (nodes) { nodes.master.volume.rampTo(-6 + 1.5 * (run.vol || 0), 0.05); const f = nodes.slowLP.frequency, t2 = Tone.now(); f.cancelScheduledValues(t2); f.setValueAtTime(20000, t2); if (!specialPhase) Tone.Transport.bpm.rampTo(baseBpm, 1.5); }
     thunderCrash(); shake(22);
     e.locked = false; e.hp = 0; e.alive = false; run.kills++;
@@ -2030,7 +2113,7 @@ function newRun() {
   for (const s of STEMS) { s.silenced = 0; if (!s.base) stemOff(s.id, true); }
   equipped.clear(); for (const k in gearOrder) delete gearOrder[k];
   specialPending = false; if (specialPhase === "solo") specialPhase = null; cooldownUntil = 0; invulnUntil = 0;
-  if (baseBpm !== 128) { baseBpm = 128; if (nodes && !specialPhase) Tone.Transport.bpm.rampTo(baseBpm, 0.5); }
+  baseBpm = 128; if (nodes && !specialPhase) { Tone.Transport.bpm.cancelScheduledValues(Tone.now()); Tone.Transport.bpm.rampTo(baseBpm, 0.5); }
   resetMix();
   document.getElementById("hudTop").hidden = false; document.getElementById("hudBot").hidden = false;
   showPilots();
@@ -2063,6 +2146,7 @@ function startRoom(type) {
   if (run.room === 7) { setTempo(); banner("Act II", `The tempo climbs to ${baseBpm} BPM`); }
   hideScreen();
   enemies = []; shots = []; bullets = []; fx = []; finale = null;
+  restoreMix();
   run.fightOver = false; run.mode = "fight"; run.roomStart = performance.now(); ensureAudio();
   P.x = AW / 2; P.y = AH * 0.72;
   if (type === "green") { run.fightOver = true; heal(Math.round(P.maxHp * 0.35)); banner("Green Room", "Hull repaired 35%"); setTimeout(() => { if (run && run.type === "green" && run.mode === "fight") showChoices("green"); }, 1400); return; }
@@ -2088,7 +2172,7 @@ function endRun(won) {
   if (specialPhase === "windup") specialAbort = true; else specialPhase = null;
   specialPending = false;
   if (nodes) { const f = nodes.slowLP.frequency, t = Tone.now(); f.cancelScheduledValues(t); f.setValueAtTime(20000, t); f.exponentialRampToValueAtTime(350, t + 0.6); f.exponentialRampToValueAtTime(20000, t + 3); }
-  if (baseBpm !== 128) { baseBpm = 128; if (!specialAbort) Tone.Transport.bpm.rampTo(128, 2); }
+  baseBpm = 128; finale = null; if (!specialAbort) { Tone.Transport.bpm.cancelScheduledValues(Tone.now()); Tone.Transport.bpm.rampTo(128, 2); }
   resetMix();
   const xp = roomsCleared * 15 + run.kills + (run.miniDown ? 60 : 0) + (run.bossDown ? 150 : 0) + (won ? 100 : 0);
   const roy = Math.floor(xp / 2) + (run.tips || 0);
@@ -2238,7 +2322,7 @@ function applyCard(card) {
   }
   if (card.type === "new") { run.lv.set(card.id, 1); stemOn(card.id); }
   else if (card.type === "up") run.lv.set(card.id, run.lv.get(card.id) + 1);
-  else if (card.type === "gear") { equipped.add(card.id); gearOrder[card.id] = ++counter; if (PIECE[card.id].body === "waist") { P.maxHp += 25; P.hp += 25; } }
+  else if (card.type === "gear") { ensureSet(PIECE[card.id].set); equipped.add(card.id); gearOrder[card.id] = ++counter; if (PIECE[card.id].body === "waist") { P.maxHp += 25; P.hp += 25; } }
   else if (card.type === "hp") { P.maxHp += 20; P.hp = Math.min(P.maxHp, P.hp + 20); run.sub = (run.sub || 0) + 1; if (nodes) nodes.kick.volume.rampTo(2 * run.sub, 0.5); }
   else if (card.type === "amp") { run.vol = (run.vol || 0) + 1; if (nodes) nodes.master.volume.rampTo(-6 + 1.5 * run.vol, 0.5); }
   else if (card.type === "tempo") { run.tempo = (run.tempo || 0) + 1; setTempo(); }
@@ -2250,24 +2334,34 @@ function applyCard(card) {
 // Non-layer pickups change the mix instead of adding a part: volume, kick depth and tempo
 const actBpm = () => (run && run.room >= 7 ? 134 : 128) + 4 * ((run && run.tempo) || 0);
 function setTempo() { baseBpm = actBpm(); if (nodes && !specialPhase && !specialPending) Tone.Transport.bpm.rampTo(baseBpm, 1); }
-function resetMix() { if (!nodes) return; nodes.master.volume.rampTo(-6, 0.5); nodes.kick.volume.rampTo(0, 0.5); if (lensFx) for (const k in lensFx.g) lensFx.g[k].gain.rampTo(0, 0.5); if (amb) for (const k of ["fireG", "coldG", "ltG"]) amb[k].gain.rampTo(0, 0.8); }
+function restoreMix() {
+  if (!nodes || specialPhase || specialPending) return;
+  const t = Tone.now(), f = nodes.slowLP.frequency;
+  f.cancelScheduledValues(t); f.setValueAtTime(20000, t);
+  nodes.master.volume.cancelScheduledValues(t); nodes.master.volume.rampTo(-6 + 1.5 * ((run && run.vol) || 0), 0.3);
+  Tone.Transport.bpm.cancelScheduledValues(t); Tone.Transport.bpm.rampTo(baseBpm, 0.5);
+}
+function resetMix() { if (!nodes) return; nodes.master.volume.rampTo(-6, 0.5); nodes.kick.volume.rampTo(0, 0.5); lensSound(true); if (amb) ambBeds({ fireG: 0, coldG: 0, ltG: 0 }); }
 // Lenses colour every weapon layer: the weapon stems feed a shared lens bus with one effect per element
 let lensFx = null;
-function lensSound() {
+function lensSound(clear) {
   if (!nodes) return;
-  if (!lensFx) {
-    lensFx = { in: new Tone.Gain(1), g: {} };
-    for (const el of Object.keys(EL)) {
-      const g = new Tone.Gain(0).connect(nodes.duckBus);
-      const chain = el === "fire" ? [new Tone.Distortion({ distortion: 0.6, oversample: "2x" }), new Tone.Filter({ type: "lowpass", frequency: 3600 })]
+  if (!lensFx) lensFx = { in: new Tone.Gain(1), g: {}, wired: {} };
+  for (const el of Object.keys(EL)) {
+    const lv = clear ? 0 : lensLv(el), base = el === "fire" ? 0.55 : el === "cold" ? 0.7 : 0.45, g0 = lensFx.g[el];
+    if (!lv) { if (g0 && lensFx.wired[el]) { g0.gain.rampTo(0, 0.4); lensFx.wired[el] = false; setTimeout(() => { if (!lensFx.wired[el]) g0.disconnect(); }, 600); } continue; }
+    if (!g0) {
+      const g = new Tone.Gain(0);
+      const chain = el === "fire" ? [new Tone.Distortion({ distortion: 0.6, oversample: "none" }), new Tone.Filter({ type: "lowpass", frequency: 3600 })]
       : el === "cold" ? [new Tone.Filter({ type: "highpass", frequency: 900 }), new Tone.FeedbackDelay({ delayTime: "8n.", feedback: 0.5, wet: 1 }), new Tone.Filter({ type: "lowpass", frequency: 7000 })]
       : [new Tone.Distortion({ distortion: 1, oversample: "none" }), new Tone.Filter({ type: "highpass", frequency: 2200 }), new Tone.Tremolo(16, 0.9).start()];
       lensFx.in.chain(...chain, g);
       lensFx.g[el] = g;
     }
+    if (!lensFx.wired[el]) { lensFx.g[el].connect(nodes.duckBus); lensFx.wired[el] = true; }
+    lensFx.g[el].gain.rampTo(base * (lv >= 2 ? 1.3 : 1), 0.5);
   }
-  for (const id of EL_WEAPONS) { const s = byId(id); if (s.vol && !s.lensLinked) { s.vol.connect(lensFx.in); s.lensLinked = true; } }
-  for (const el of Object.keys(EL)) { const lv = lensLv(el), base = el === "fire" ? 0.55 : el === "cold" ? 0.7 : 0.45; lensFx.g[el].gain.rampTo(lv ? base * (lv >= 2 ? 1.3 : 1) : 0, 0.5); }
+  if (!clear) for (const id of EL_WEAPONS) { const s = byId(id); if (s.vol && !s.lensLinked) { s.vol.connect(lensFx.in); s.lensLinked = true; } }
 }
 const tipAmt = () => 10 + 2 * ((run && run.room) || 0);
 const patchAmt = () => Math.round(P.maxHp * 0.1);
@@ -2749,8 +2843,20 @@ function hud() {
   const lab = { fight: "F", elite: "E", green: "G", mini: "M", boss: "B" };
   let m = ""; for (let i = 1; i <= 12; i++) { const t = run.path[i - 1] || (i === 6 ? "mini" : i === 12 ? "boss" : ""); m += `<i class="${i < run.room ? "done" : i === run.room ? "now" : ""} ${i === 6 || i === 12 ? "boss" : ""}" title="Room ${i}">${lab[t] || ""}</i>`; }
   setHTML("map", m);
+  // boss health bar: name, phase and a mark where the next phase starts
   const boss = enemies.find(e => e.boss && e.alive);
-  $("bossWrap").hidden = !boss; if (boss) $("bossBar").style.width = (boss.hp / boss.maxHp * 100).toFixed(1) + "%";
+  $("bossHud").hidden = !boss;
+  if (boss) {
+    const st = boss.stage || 1, mute = boss.type === "mute", fin = mute && st === 3;
+    const cap = mute && st === 2 ? boss.maxHp * 0.6 : boss.maxHp, frac = fin ? 1 : Math.max(0, boss.hp / cap);
+    setText("bossName", mute ? (st >= 2 ? "The Open Mouth" : "The Mute") : ET[boss.type].name);
+    setText("bossPhase", mute ? (fin ? "Final joust: dash through him" : `Phase ${st} of 2`) : "Mini-boss");
+    setText("bossHpTxt", fin ? "" : `${Math.ceil(boss.hp)} / ${Math.round(cap)}`);
+    $("bossBar").style.width = (frac * 100).toFixed(1) + "%";
+    $("bossBar").style.setProperty("--bc", mute && st >= 2 ? "linear-gradient(90deg, #ff4d6d, #ff9b54)" : "linear-gradient(90deg, #b18cff, #ff5c8a)");
+    const mk = $("bossMark"); mk.hidden = !(mute && st === 1 || boss.type === "overdrive"); mk.style.left = "50%";
+    $("bossHud").classList.toggle("final", fin);
+  }
   const rock = byId("rock"), inv = invulnUntil - now;
   const mp = inv > 0 ? `Invincible ${(inv / 1000).toFixed(1)} s` : rock.state === "on" ? (fullSet ? SETS[fullSet].name + " · set bonus" : "Pilot · 100%") : rock.state === "queued" ? "Pilot drops on the bar" : "Autopilot · 60%";
   setText("modePill", mp);
@@ -2823,7 +2929,7 @@ showHub();
 requestAnimationFrame(frame);
 document.addEventListener("visibilitychange", () => { if (document.hidden && run && run.mode === "fight" && !paused) togglePause(); });
 
-window.__game = { get run() { return run; }, get finale() { return finale; }, muteBreak, silence, slotStrip, buildRoom, get fx() { return fx; }, damagePlayer, get enemies() { return enemies; }, P, STEMS, byId, newRun, startAudio, startRoom, showChoices, pick, equipped, applyCard, save, SETS, PIECE, get bpm() { return Tone.Transport.bpm.value; }, get specialPhase() { return specialPhase; }, get specialSet() { return specialSet; }, triggerSpecial, endRun, membersOf };
+window.__game = { get run() { return run; }, get nodes() { return nodes; }, RT, get amb() { return amb; }, get lensFx() { return lensFx; }, get finale() { return finale; }, muteBreak, silence, slotStrip, buildRoom, get fx() { return fx; }, damagePlayer, get enemies() { return enemies; }, P, STEMS, byId, newRun, startAudio, startRoom, showChoices, pick, equipped, applyCard, save, SETS, PIECE, get bpm() { return Tone.Transport.bpm.value; }, get specialPhase() { return specialPhase; }, get specialSet() { return specialSet; }, triggerSpecial, endRun, membersOf };
 })();
 </script>
 
