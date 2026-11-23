@@ -1689,12 +1689,14 @@ const BAND = { 3: "Trio", 4: "Quartet", 5: "Quintet", 6: "Sextet" };
 
 // ---------- Account save (this browser only) ----------
 const SAVE_KEY = "gw-gig-run-v1";
-function defaultSave() { return { xp: 0, level: 1, royalties: 0, owned: {}, bans: [], runs: 0, wins: 0, bestRoom: 0, dev: false, idle: false, opts: { dmg: true, shake: 1, calm: false, ui: 1, vMaster: 1, vMusic: 1, vSfx: 1 } }; }
+function defaultSave() { return { xp: 0, level: 1, royalties: 0, owned: {}, bans: [], runs: 0, wins: 0, bestRoom: 0, dev: false, idle: false, opts: { dmg: true, shake: 1, calm: false, ui: 1, vMaster: 0.5, vMusic: 1, vSfx: 1 } }; }
 let save = defaultSave();
 try { const j = JSON.parse(localStorage.getItem(SAVE_KEY) || "null"); if (j) save = Object.assign(defaultSave(), j); } catch (e) {}
 if (save.owned.metal) { save.owned["set-pm"] = 1; delete save.owned.metal; }
-const OPT = () => (save.opts = Object.assign({ dmg: true, shake: 1, calm: false, ui: 1, vMaster: 1, vMusic: 1, vSfx: 1 }, save.opts || {}));
+const OPT = () => (save.opts = Object.assign({ dmg: true, shake: 1, calm: false, ui: 1, vMaster: 0.5, vMusic: 1, vSfx: 1 }, save.opts || {}));
 // Volume: sliders are 0-100%, squared so the low end of the slider is usable; 0 mutes
+// Gee's rule: the game starts quieter than usual (Master 50%, about -12 dB). Older saves made before this get it once.
+if (save.volDefault !== 2) { const o = OPT(); o.vMaster = Math.min(o.vMaster, 0.5); save.volDefault = 2; persist(); }
 function applyVol() { if (!nodes) return; const o = OPT(); try { Tone.Destination.mute = o.vMaster <= 0; if (o.vMaster > 0) Tone.Destination.volume.value = Tone.gainToDb(o.vMaster * o.vMaster); } catch (e) {}
   if (nodes) { nodes.musicG.gain.rampTo(o.vMusic * o.vMusic, 0.05); nodes.sfxG.gain.rampTo(o.vSfx * o.vSfx, 0.05); } }
 function applyOpts() { const o = OPT(); applyVol(); document.documentElement.style.setProperty("--ui", o.ui); document.getElementById("app").classList.toggle("calm", !!o.calm); }
