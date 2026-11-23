@@ -346,7 +346,9 @@ html { font-size: calc(16px * var(--ui, 1)); }
 <script>
 // Ask the browser for a bigger audio buffer ("playback" instead of "interactive") before Tone.js creates its context.
 // The game loop and the music share one page; the small default buffer crackled and skipped on busy machines.
-(() => { const N = window.AudioContext; if (!N) return; try { class PlaybackAudioContext extends N { constructor(o) { super(Object.assign({}, o || {}, { latencyHint: "playback" })); } } window.AudioContext = PlaybackAudioContext; } catch (e) {} })();
+// 44.1 kHz instead of the usual 48 kHz costs nothing audible and ~8% less audio work; Lighter audio drops to 32 kHz (from the next load)
+function liteRate() { try { const sv = JSON.parse(localStorage.getItem("gw-gig-run-v1") || "{}"); return sv.opts && sv.opts.lite ? 32000 : 44100; } catch (e) { return 44100; } }
+(() => { const N = window.AudioContext; if (!N) return; try { class PlaybackAudioContext extends N { constructor(o) { super(Object.assign({}, o || {}, { latencyHint: "playback", sampleRate: liteRate() })); } } window.AudioContext = PlaybackAudioContext; } catch (e) {} })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script>
@@ -355,6 +357,13 @@ html { font-size: calc(16px * var(--ui, 1)); }
 // A bigger audio buffer and scheduling lookahead, set before any audio node exists: the game loop and the music
 // share the main thread, and the default "interactive" setting crackled and skipped on busy or slower machines.
 try { Tone.context.lookAhead = 0.2; } catch (e) {}
+// Filters without the four always-running Signals that Tone.Filter keeps (frequency, Q, gain, detune): every Signal is a
+// ConstantSourceNode the audio thread renders all the time. 12 dB/oct filters use Tone.BiquadFilter's plain AudioParams instead.
+function LF(o, type) {
+  if (typeof o !== "object") o = { frequency: o, type: type || "lowpass" };
+  if ((o.rolloff && o.rolloff !== -12) || !Tone.BiquadFilter) return new Tone.Filter(o);
+  return new Tone.BiquadFilter({ type: o.type || "lowpass", frequency: o.frequency === undefined ? 350 : o.frequency, Q: o.Q === undefined ? 1 : o.Q, gain: o.gain || 0 });
+}
 // ===== Music data, gear sets and synth graph: carried over from the Sound Lab (v6 sets engine) =====
 const STEPS = 128;             // 8 bars of 16th notes
 const BAR = 16;
@@ -422,13 +431,13 @@ const up12 = n => Tone.Frequency(n).transpose(12).toNote();
 const melody = rows => new Map(rows.map(r => [r[0], r]));
 const VOWEL = { a: [800, 1150, 2900], o: [450, 800, 2830], u: [320, 870, 2240], sop: [950, 1450, 3000] };
 function mkFormant(input, vowel, out, qs = [5, 6, 8]) {
-  return vowel.map((f, i) => { const bp = new Tone.Filter({ type: "bandpass", frequency: f, Q: qs[i] }); const g = new Tone.Gain([1, 0.5, 0.22][i]); input.connect(bp); bp.connect(g); g.connect(out); return bp; });
+  return vowel.map((f, i) => { const bp = LF({ type: "bandpass", frequency: f, Q: qs[i] }); const g = new Tone.Gain([1, 0.5, 0.22][i]); input.connect(bp); bp.connect(g); g.connect(out); return bp; });
 }
 function mkVoice(dest, o) {
   const pan = new Tone.Panner(0);
   const vib = new Tone.Vibrato(o.vibF || 6, o.vibD || 0.03);
   const fx = new Tone.FeedbackDelay({ delayTime: o.delay || "16n", feedback: 0.2, wet: o.wet ?? 0.15 });
-  const lp = new Tone.Filter({ type: "lowpass", frequency: o.lp || 6000 });
+  const lp = LF({ type: "lowpass", frequency: o.lp || 6000 });
   const pre = o.dist ? [new Tone.Distortion({ distortion: o.dist, oversample: "2x" })] : [];
   const syn = new Tone.Synth({ oscillator: { type: o.osc || "sawtooth" }, envelope: o.env || { attack: 0.002, decay: 0.08, sustain: 0.7, release: 0.05 }, portamento: o.port ?? 0.006 });
   syn.chain(...pre, lp, vib, fx, pan, dest);
@@ -493,35 +502,35 @@ defineSet({
   },
   build(out) {
     const I = {};
-    const msnHP = new Tone.Filter({ type: "highpass", frequency: 1300 }).connect(out);
+    const msnHP = LF({ type: "highpass", frequency: 1300 }).connect(out);
     I.snare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.16, sustain: 0 } }).connect(msnHP);
     I.snBody = new Tone.MembraneSynth({ pitchDecay: 0.015, octaves: 1.5, envelope: { attack: 0.001, decay: 0.1, sustain: 0 } }).connect(out);
     I.snBody.volume.value = -3;
     I.kick = new Tone.MembraneSynth({ pitchDecay: 0.012, octaves: 3.5, envelope: { attack: 0.001, decay: 0.11, sustain: 0 } }).connect(out);
     I.kick.volume.value = -2;
-    const gtrHP = new Tone.Filter({ type: "highpass", frequency: 85 });
+    const gtrHP = LF({ type: "highpass", frequency: 85 });
     const gtrOut = new Tone.Gain(0.55).connect(out);
-    gtrHP.chain(new Tone.Distortion({ distortion: 0.95, oversample: "2x" }), new Tone.Filter({ type: "lowpass", frequency: 3800, rolloff: -24 }), gtrOut);
+    gtrHP.chain(new Tone.Distortion({ distortion: 0.95, oversample: "2x" }), LF({ type: "lowpass", frequency: 3800, rolloff: -24 }), gtrOut);
     I.gtr = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 14 }, envelope: { attack: 0.002, decay: 0.08, sustain: 0.7, release: 0.04 } }).connect(gtrHP);
-    I.gtr.maxPolyphony = 9;
+    I.gtr.maxPolyphony = 6;
     I.bass = new Tone.MonoSynth({ oscillator: { type: "sawtooth" }, filter: { Q: 1, type: "lowpass", rolloff: -24 },
       envelope: { attack: 0.002, decay: 0.1, sustain: 0.5, release: 0.04 }, filterEnvelope: { attack: 0.001, decay: 0.08, sustain: 0.3, baseFrequency: 220, octaves: 2.5 } }).connect(new Tone.Distortion(0.3).connect(out));
     I.bass.volume.value = -6;
     const leadDelay = new Tone.FeedbackDelay({ delayTime: "8n.", feedback: 0.3, wet: 0.25 }).connect(out);
     const leadVib = new Tone.Vibrato(6, 0.04).connect(leadDelay);
-    const leadCab = new Tone.Filter({ type: "lowpass", frequency: 5200 }).connect(leadVib);
+    const leadCab = LF({ type: "lowpass", frequency: 5200 }).connect(leadVib);
     I.lead = new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.003, decay: 0.1, sustain: 0.6, release: 0.05 }, portamento: 0.008 }).connect(new Tone.Distortion(0.85).connect(leadCab));
     I.lead.volume.value = -13;
-    I.keys = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsquare", count: 2, spread: 12 }, envelope: { attack: 0.005, decay: 0.25, sustain: 0.4, release: 0.2 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 2600 }).connect(out));
-    I.keys.maxPolyphony = 8; I.keys.volume.value = -14;
+    I.keys = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsquare", count: 2, spread: 12 }, envelope: { attack: 0.005, decay: 0.25, sustain: 0.4, release: 0.2 } }).connect(LF({ type: "lowpass", frequency: 2600 }).connect(out));
+    I.keys.maxPolyphony = 6; I.keys.volume.value = -14;
     const chIn = new Tone.Vibrato(4.8, 0.05);
     mkFormant(chIn, VOWEL.o, new Tone.Gain(2.6).connect(out));
     I.choir = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 16 }, envelope: { attack: 0.35, decay: 0.2, sustain: 0.9, release: 1.0 } }).connect(chIn);
-    I.choir.maxPolyphony = 8;
+    I.choir.maxPolyphony = 6;
     const voxOut = new Tone.Gain(4.2).connect(new Tone.Distortion(0.12).connect(new Tone.FeedbackDelay({ delayTime: "4n", feedback: 0.22, wet: 0.2 }).connect(out)));
     const voxIn = new Tone.Vibrato(5.6, 0.09);
     I.voxF = mkFormant(voxIn, VOWEL.a, voxOut);
-    I.vox = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 3, spread: 10 }, envelope: { attack: 0.05, decay: 0.2, sustain: 0.85, release: 0.3 }, portamento: 0.04 }).connect(voxIn);
+    I.vox = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 2, spread: 10 }, envelope: { attack: 0.05, decay: 0.2, sustain: 0.85, release: 0.3 }, portamento: 0.04 }).connect(voxIn);
     return I;
   },
   play(I, x) {
@@ -609,31 +618,31 @@ defineSet({
   build(out) {
     const I = {};
     I.kick = new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 5, envelope: { attack: 0.001, decay: 0.3, sustain: 0 } }).connect(out);
-    const snBP = new Tone.Filter({ type: "bandpass", frequency: 1700, Q: 0.7 }).connect(out);
+    const snBP = LF({ type: "bandpass", frequency: 1700, Q: 0.7 }).connect(out);
     I.snare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.06, sustain: 0.45, release: 0.004 } }).connect(snBP);   // held then cut: gated-reverb feel
     I.snBody = new Tone.MembraneSynth({ pitchDecay: 0.02, octaves: 1.2, envelope: { attack: 0.001, decay: 0.12, sustain: 0 } }).connect(out);
     I.snBody.volume.value = -6;
-    I.hat = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.03, sustain: 0 } }).connect(new Tone.Filter({ type: "highpass", frequency: 9000 }).connect(out));
+    I.hat = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.03, sustain: 0 } }).connect(LF({ type: "highpass", frequency: 9000 }).connect(out));
     I.hat.volume.value = -12;
     I.bass = new Tone.MonoSynth({ oscillator: { type: "sawtooth" }, filter: { Q: 2, type: "lowpass", rolloff: -24 },
       envelope: { attack: 0.002, decay: 0.12, sustain: 0.4, release: 0.05 }, filterEnvelope: { attack: 0.001, decay: 0.1, sustain: 0.2, baseFrequency: 260, octaves: 2.6 } }).connect(out);
     I.bass.volume.value = -5;
     const pp = new Tone.PingPongDelay({ delayTime: "8n.", feedback: 0.35, wet: 0.3 }).connect(out);
-    I.arp = new Tone.Synth({ oscillator: { type: "square" }, envelope: { attack: 0.002, decay: 0.1, sustain: 0.1, release: 0.06 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 3200 }).connect(pp));
+    I.arp = new Tone.Synth({ oscillator: { type: "square" }, envelope: { attack: 0.002, decay: 0.1, sustain: 0.1, release: 0.06 } }).connect(LF({ type: "lowpass", frequency: 3200 }).connect(pp));
     I.arp.volume.value = -16;
     const chorus = new Tone.Chorus(3, 3.5, 0.6).start();
-    chorus.chain(new Tone.Filter({ type: "lowpass", frequency: 2400 }), out);
-    I.pads = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 3, spread: 40 }, envelope: { attack: 0.6, decay: 0.4, sustain: 0.8, release: 1.5 } }).connect(chorus);
-    I.pads.maxPolyphony = 10; I.pads.volume.value = -12;
+    chorus.chain(LF({ type: "lowpass", frequency: 2400 }), out);
+    I.pads = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 40 }, envelope: { attack: 0.6, decay: 0.4, sustain: 0.8, release: 1.5 } }).connect(chorus);
+    I.pads.maxPolyphony = 8; I.pads.volume.value = -12;
     const voxIn = new Tone.Vibrato(4.5, 0.03);
     I.voxF = mkFormant(voxIn, VOWEL.u, new Tone.Gain(4.5).connect(new Tone.Chorus(2, 2, 0.4).start().connect(out)));
     I.vox = new Tone.Synth({ oscillator: { type: "fatsquare", count: 2, spread: 8 }, envelope: { attack: 0.06, decay: 0.2, sustain: 0.85, release: 0.4 }, portamento: 0.05 }).connect(voxIn);
     const leadFx = new Tone.FeedbackDelay({ delayTime: "8n.", feedback: 0.32, wet: 0.28 }).connect(out);
-    I.lead = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 2, spread: 20 }, envelope: { attack: 0.03, decay: 0.2, sustain: 0.75, release: 0.3 }, portamento: 0.05 }).connect(new Tone.Vibrato(5.5, 0.06).connect(new Tone.Filter({ type: "lowpass", frequency: 5000 }).connect(leadFx)));
+    I.lead = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 2, spread: 20 }, envelope: { attack: 0.03, decay: 0.2, sustain: 0.75, release: 0.3 }, portamento: 0.05 }).connect(new Tone.Vibrato(5.5, 0.06).connect(LF({ type: "lowpass", frequency: 5000 }).connect(leadFx)));
     I.lead.volume.value = -15;
     I.brass = new Tone.PolySynth(Tone.MonoSynth, { oscillator: { type: "sawtooth" }, filter: { Q: 1, type: "lowpass" },
       envelope: { attack: 0.02, decay: 0.25, sustain: 0.45, release: 0.2 }, filterEnvelope: { attack: 0.04, decay: 0.25, sustain: 0.35, baseFrequency: 380, octaves: 3 } }).connect(out);
-    I.brass.maxPolyphony = 8; I.brass.volume.value = -16;
+    I.brass.maxPolyphony = 6; I.brass.volume.value = -16;
     return I;
   },
   play(I, x) {
@@ -723,24 +732,24 @@ defineSet({
   build(out) {
     const I = {};
     I.bd = new Tone.MembraneSynth({ pitchDecay: 0.1, octaves: 2, envelope: { attack: 0.002, decay: 0.9, sustain: 0 } }).connect(out);
-    I.snare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.11, sustain: 0 } }).connect(new Tone.Filter({ type: "bandpass", frequency: 3200, Q: 0.8 }).connect(out));
+    I.snare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.11, sustain: 0 } }).connect(LF({ type: "bandpass", frequency: 3200, Q: 0.8 }).connect(out));
     I.snare.volume.value = -6;
-    I.cym = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.003, decay: 2.2, sustain: 0 } }).connect(new Tone.Filter({ type: "highpass", frequency: 5500 }).connect(out));
+    I.cym = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.003, decay: 2.2, sustain: 0 } }).connect(LF({ type: "highpass", frequency: 5500 }).connect(out));
     I.cym.volume.value = -12;
     I.timp = new Tone.MembraneSynth({ pitchDecay: 0.04, octaves: 1.2, envelope: { attack: 0.002, decay: 1.4, sustain: 0 } }).connect(out);
     I.timp.volume.value = -2;
-    I.str = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 3, spread: 20 }, envelope: { attack: 0.005, decay: 0.09, sustain: 0.1, release: 0.08 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 3000 }).connect(out));
+    I.str = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 20 }, envelope: { attack: 0.005, decay: 0.09, sustain: 0.1, release: 0.08 } }).connect(LF({ type: "lowpass", frequency: 3000 }).connect(out));
     I.str.maxPolyphony = 6; I.str.volume.value = -12;
-    I.horns = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 10 }, envelope: { attack: 0.15, decay: 0.3, sustain: 0.8, release: 0.6 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 1100 }).connect(out));
-    I.horns.maxPolyphony = 8; I.horns.volume.value = -8;
+    I.horns = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 10 }, envelope: { attack: 0.15, decay: 0.3, sustain: 0.8, release: 0.6 } }).connect(LF({ type: "lowpass", frequency: 1100 }).connect(out));
+    I.horns.maxPolyphony = 6; I.horns.volume.value = -8;
     const sopIn = new Tone.Vibrato(5.6, 0.12);
     I.sopF = mkFormant(sopIn, VOWEL.sop, new Tone.Gain(4).connect(new Tone.FeedbackDelay({ delayTime: "4n", feedback: 0.2, wet: 0.18 }).connect(out)));
     I.sop = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 2, spread: 8 }, envelope: { attack: 0.12, decay: 0.2, sustain: 0.85, release: 0.5 }, portamento: 0.05 }).connect(sopIn);
     I.vln = new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.08, decay: 0.1, sustain: 0.8, release: 0.2 }, portamento: 0.02 })
-      .connect(new Tone.Filter({ type: "lowpass", frequency: 3800 }).connect(new Tone.Vibrato(5.8, 0.06).connect(out)));
+      .connect(LF({ type: "lowpass", frequency: 3800 }).connect(new Tone.Vibrato(5.8, 0.06).connect(out)));
     I.vln.volume.value = -13;
     I.cello = new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.12, decay: 0.2, sustain: 0.85, release: 0.3 } })
-      .connect(new Tone.Filter({ type: "lowpass", frequency: 1500 }).connect(new Tone.Vibrato(5, 0.05).connect(out)));
+      .connect(LF({ type: "lowpass", frequency: 1500 }).connect(new Tone.Vibrato(5, 0.05).connect(out)));
     I.cello.volume.value = -8;
     return I;
   },
@@ -815,7 +824,7 @@ function build() {
   const comp = new Tone.Compressor({ threshold: -16, ratio: 3, attack: 0.01, release: 0.2 });
   const limiter = new Tone.Limiter(-1);
   const meter = new Tone.Meter({ smoothing: 0.6 });
-  const slowLP = new Tone.Filter({ type: "lowpass", frequency: 20000, rolloff: -24 });
+  const slowLP = LF({ type: "lowpass", frequency: 20000, rolloff: -24 });
   // Volume settings: music and effects each get their own gain ahead of the shared slow-mo filter, compressor and limiter
   const musicG = new Tone.Gain(1), sfxG = new Tone.Gain(1);
   master.chain(musicG, slowLP, comp, limiter, Tone.Destination);
@@ -837,7 +846,7 @@ function build() {
   const F = id => byId(id).fader;
   const n = { master, meter, reverb, pumpBus, duckBus, beatBus, slowLP, musicG, sfxG };
   // Shred special: riser for the slow-motion windup, two solo guitars for the solo or the duel
-  const riserBP = new Tone.Filter({ type: "bandpass", frequency: 400, Q: 2 }).connect(comp);
+  const riserBP = LF({ type: "bandpass", frequency: 400, Q: 2 }).connect(comp);
   n.riserBP = riserBP;
   n.riser = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 1, decay: 0.05, sustain: 1, release: 0.1 } }).connect(riserBP);
   n.riser.volume.value = -14;
@@ -850,7 +859,7 @@ function build() {
 
   // Base beat
   n.kick = new Tone.MembraneSynth({ pitchDecay: 0.03, octaves: 6, oscillator: { type: "sine" }, envelope: { attack: 0.001, decay: 0.38, sustain: 0, release: 0.05 } }).connect(F("beat"));
-  const hatHP = new Tone.Filter({ type: "highpass", frequency: 8000 }).connect(F("beat"));
+  const hatHP = LF({ type: "highpass", frequency: 8000 }).connect(F("beat"));
   n.hat = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.035, sustain: 0 } }).connect(hatHP);
   n.ohat = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.002, decay: 0.16, sustain: 0 } }).connect(hatHP);
   n.hat.volume.value = -8; n.ohat.volume.value = -9;
@@ -858,19 +867,19 @@ function build() {
   // Flute (Sword)
   const vib = new Tone.Vibrato(5.2, 0.07).connect(F("flute"));
   n.flute = new Tone.Synth({ oscillator: { type: "custom", partials: [1, 0.32, 0.12, 0.05, 0.02] }, envelope: { attack: 0.04, decay: 0.15, sustain: 0.75, release: 0.18 }, portamento: 0.012 }).connect(vib);
-  const breathBP = new Tone.Filter({ type: "bandpass", frequency: 2400, Q: 1.1 }).connect(F("flute"));
+  const breathBP = LF({ type: "bandpass", frequency: 2400, Q: 1.1 }).connect(F("flute"));
   n.breath = new Tone.NoiseSynth({ noise: { type: "pink" }, envelope: { attack: 0.005, decay: 0.09, sustain: 0.05, release: 0.05 } }).connect(breathBP);
   n.breath.volume.value = -20;
 
   // Dubstep drop (Plasma Blade)
-  n.wobF = new Tone.Filter({ type: "lowpass", frequency: 200, Q: 7, rolloff: -24 });
+  n.wobF = LF({ type: "lowpass", frequency: 200, Q: 7, rolloff: -24 });
   const dist = new Tone.Distortion(0.45);
   n.wobF.chain(dist, F("drop"));
-  n.wob = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 3, spread: 28 }, envelope: { attack: 0.005, decay: 0.05, sustain: 1, release: 0.06 } }).connect(n.wobF);
+  n.wob = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 2, spread: 28 }, envelope: { attack: 0.005, decay: 0.05, sustain: 1, release: 0.06 } }).connect(n.wobF);
   n.wob.volume.value = -4;
   n.sub = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.005, decay: 0.05, sustain: 1, release: 0.06 } }).connect(F("drop"));
   n.sub.volume.value = -5;
-  const snHP = new Tone.Filter({ type: "highpass", frequency: 900 }).connect(F("drop"));
+  const snHP = LF({ type: "highpass", frequency: 900 }).connect(F("drop"));
   n.dsnare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.22, sustain: 0 } }).connect(snHP);
   n.dsnBody = new Tone.MembraneSynth({ pitchDecay: 0.02, octaves: 2, envelope: { attack: 0.001, decay: 0.12, sustain: 0 } }).connect(F("drop"));
   n.dsnBody.volume.value = -4;
@@ -887,11 +896,11 @@ function build() {
     filterEnvelope: { attack: 0.001, decay: 0.12, sustain: 0.1, baseFrequency: 700, octaves: 3 } }).connect(arpDelay);
 
   // Pads (Guardian Shield)
-  const padLP = new Tone.Filter({ type: "lowpass", frequency: 1500 }).connect(F("pads"));
-  n.pads = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 3, spread: 30 }, envelope: { attack: 0.3, decay: 0.3, sustain: 0.8, release: 1.2 } }).connect(padLP);
-  n.pads.maxPolyphony = 12; n.pads.volume.value = -8;
+  const padLP = LF({ type: "lowpass", frequency: 1500 }).connect(F("pads"));
+  n.pads = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 30 }, envelope: { attack: 0.3, decay: 0.3, sustain: 0.8, release: 1.2 } }).connect(padLP);
+  n.pads.maxPolyphony = 8; n.pads.volume.value = -8;
   // Gong (Guardian Shield): inharmonic FM strike, a higher shimmer partial and a soft mallet thump
-  const gongLP = new Tone.Filter({ type: "lowpass", frequency: 5200 }).connect(F("pads"));
+  const gongLP = LF({ type: "lowpass", frequency: 5200 }).connect(F("pads"));
   n.gong = new Tone.FMSynth({ harmonicity: 1.41, modulationIndex: 9, oscillator: { type: "sine" }, modulation: { type: "sine" },
     envelope: { attack: 0.003, decay: 4, sustain: 0, release: 2 }, modulationEnvelope: { attack: 0.003, decay: 1.6, sustain: 0.15, release: 1.5 } }).connect(gongLP);
   n.gong2 = new Tone.FMSynth({ harmonicity: 2.76, modulationIndex: 5, envelope: { attack: 0.004, decay: 2.6, sustain: 0, release: 1.5 },
@@ -909,33 +918,33 @@ function build() {
   const formSum = new Tone.Gain(3.2).connect(F("choir"));
   const voxVib = new Tone.Vibrato(4.6, 0.05);
   [[800, 6, 1], [1150, 7, 0.55], [2900, 9, 0.22]].forEach(([f, q, g]) => {
-    const bp = new Tone.Filter({ type: "bandpass", frequency: f, Q: q });
+    const bp = LF({ type: "bandpass", frequency: f, Q: q });
     const gg = new Tone.Gain(g);
     voxVib.connect(bp); bp.connect(gg); gg.connect(formSum);
   });
   n.choir = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 14 }, envelope: { attack: 0.45, decay: 0.2, sustain: 0.9, release: 1.4 } }).connect(voxVib);
-  n.choir.maxPolyphony = 10;
+  n.choir.maxPolyphony = 8;
 
   // Strings (Comet Bow)
-  const strLP = new Tone.Filter({ type: "lowpass", frequency: 2600 }).connect(F("strings"));
-  n.str = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 3, spread: 18 }, envelope: { attack: 0.012, decay: 0.16, sustain: 0.35, release: 0.14 } }).connect(strLP);
+  const strLP = LF({ type: "lowpass", frequency: 2600 }).connect(F("strings"));
+  n.str = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 18 }, envelope: { attack: 0.012, decay: 0.16, sustain: 0.35, release: 0.14 } }).connect(strLP);
   n.str.maxPolyphony = 6;
 
   // Rock kit (Pilot)
   n.rkick = new Tone.MembraneSynth({ pitchDecay: 0.025, octaves: 4, envelope: { attack: 0.001, decay: 0.26, sustain: 0 } }).connect(F("rock"));
-  const rsHP = new Tone.Filter({ type: "highpass", frequency: 1400 }).connect(F("rock"));
+  const rsHP = LF({ type: "highpass", frequency: 1400 }).connect(F("rock"));
   n.rsnare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.17, sustain: 0 } }).connect(rsHP);
   n.rsnBody = new Tone.MembraneSynth({ pitchDecay: 0.015, octaves: 1.5, envelope: { attack: 0.001, decay: 0.1, sustain: 0 } }).connect(F("rock"));
   n.rsnBody.volume.value = -3;
-  const rhHP = new Tone.Filter({ type: "highpass", frequency: 9000 }).connect(F("rock"));
+  const rhHP = LF({ type: "highpass", frequency: 9000 }).connect(F("rock"));
   n.rhat = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.045, sustain: 0 } }).connect(rhHP);
   n.rhat.volume.value = -6;
-  const crHP = new Tone.Filter({ type: "highpass", frequency: 4500 }).connect(F("rock"));
+  const crHP = LF({ type: "highpass", frequency: 4500 }).connect(F("rock"));
   n.crash = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.002, decay: 1.6, sustain: 0 } }).connect(crHP);
   n.crash.volume.value = -9;
 
   // Hit sound effect (not a layer)
-  const hitBP = new Tone.Filter({ type: "bandpass", frequency: 1800, Q: 0.8 }).connect(sfxG);
+  const hitBP = LF({ type: "bandpass", frequency: 1800, Q: 0.8 }).connect(sfxG);
   n.hitfx = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.001, decay: 0.25, sustain: 0 } }).connect(hitBP);
   n.hitfx.volume.value = -6;
 
@@ -990,28 +999,28 @@ defineSet({
   build(out) {
     const I = {};
     I.kick = new Tone.MembraneSynth({ pitchDecay: 0.04, octaves: 4, envelope: { attack: 0.001, decay: 0.28, sustain: 0 } }).connect(out);
-    const snBP = new Tone.Filter({ type: "bandpass", frequency: 2000, Q: 0.8 }).connect(out);
+    const snBP = LF({ type: "bandpass", frequency: 2000, Q: 0.8 }).connect(out);
     I.snare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.14, sustain: 0 } }).connect(snBP);
-    I.ride = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.09, sustain: 0 } }).connect(new Tone.Filter({ type: "highpass", frequency: 7000 }).connect(out));   // cheaper than a MetalSynth
+    I.ride = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.09, sustain: 0 } }).connect(LF({ type: "highpass", frequency: 7000 }).connect(out));   // cheaper than a MetalSynth
     I.ride.volume.value = -20;
     I.bass = new Tone.MonoSynth({ oscillator: { type: "triangle" }, filter: { Q: 1, type: "lowpass" }, envelope: { attack: 0.003, decay: 0.15, sustain: 0.5, release: 0.05 },
       filterEnvelope: { attack: 0.002, decay: 0.12, sustain: 0.3, baseFrequency: 300, octaves: 2 } }).connect(out);
     I.bass.volume.value = -4;
     I.piano = new Tone.PolySynth(Tone.FMSynth, { harmonicity: 2, modulationIndex: 3, envelope: { attack: 0.002, decay: 0.35, sustain: 0.05, release: 0.2 }, modulationEnvelope: { attack: 0.002, decay: 0.2, sustain: 0 } }).connect(out);
-    I.piano.maxPolyphony = 8; I.piano.volume.value = -15;
+    I.piano.maxPolyphony = 6; I.piano.volume.value = -15;
     const rot = new Tone.Tremolo(6, 0.35).start(); rot.connect(out);
     I.organ = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "custom", partials: [1, 0.6, 0.45, 0.25, 0.15, 0.1] }, envelope: { attack: 0.03, decay: 0.1, sustain: 0.9, release: 0.3 } }).connect(rot);
-    I.organ.maxPolyphony = 8; I.organ.volume.value = -19;
+    I.organ.maxPolyphony = 6; I.organ.volume.value = -19;
     const voxIn = new Tone.Gain(1);
     I.voxF = mkFormant(voxIn, VOWEL.a, new Tone.Gain(4).connect(out));
-    I.vox = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 3, spread: 25 }, envelope: { attack: 0.01, decay: 0.15, sustain: 0.6, release: 0.2 } }).connect(voxIn);
+    I.vox = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 2, spread: 25 }, envelope: { attack: 0.01, decay: 0.15, sustain: 0.6, release: 0.2 } }).connect(voxIn);
     I.vox.volume.value = -9;
-    const amp = new Tone.Distortion({ distortion: 0.75, oversample: "none" }), cab = new Tone.Filter({ type: "lowpass", frequency: 3000 });
+    const amp = new Tone.Distortion({ distortion: 0.75, oversample: "none" }), cab = LF({ type: "lowpass", frequency: 3000 });
     amp.chain(cab, out);
     I.rhythm = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "sawtooth" }, envelope: { attack: 0.002, decay: 0.12, sustain: 0.35, release: 0.05 } }).connect(amp);
     I.rhythm.maxPolyphony = 6; I.rhythm.volume.value = -22;
     const leadAmp = new Tone.Distortion({ distortion: 0.8, oversample: "none" });
-    leadAmp.chain(new Tone.Filter({ type: "lowpass", frequency: 3800 }), new Tone.FeedbackDelay({ delayTime: "8n", feedback: 0.25, wet: 0.2 }), out);
+    leadAmp.chain(LF({ type: "lowpass", frequency: 3800 }), new Tone.FeedbackDelay({ delayTime: "8n", feedback: 0.25, wet: 0.2 }), out);
     I.lead = new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.005, decay: 0.2, sustain: 0.7, release: 0.15 }, portamento: 0.03 }).connect(new Tone.Vibrato(5.5, 0.04).connect(leadAmp));
     I.lead.volume.value = -20;
     return I;
@@ -1095,21 +1104,21 @@ defineSet({
     const I = {};
     I.drum = new Tone.MembraneSynth({ pitchDecay: 0.08, octaves: 2.5, envelope: { attack: 0.002, decay: 0.4, sustain: 0 } }).connect(out);
     I.drum.volume.value = -2;
-    I.shaker = new Tone.NoiseSynth({ noise: { type: "pink" }, envelope: { attack: 0.004, decay: 0.05, sustain: 0 } }).connect(new Tone.Filter({ type: "highpass", frequency: 5000 }).connect(out));
+    I.shaker = new Tone.NoiseSynth({ noise: { type: "pink" }, envelope: { attack: 0.004, decay: 0.05, sustain: 0 } }).connect(LF({ type: "highpass", frequency: 5000 }).connect(out));
     I.shaker.volume.value = -16;
-    I.bass = new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.003, decay: 0.35, sustain: 0, release: 0.1 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 900 }).connect(out));
+    I.bass = new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.003, decay: 0.35, sustain: 0, release: 0.1 } }).connect(LF({ type: "lowpass", frequency: 900 }).connect(out));
     I.bass.volume.value = -2;
     I.kalimba = new Tone.FMSynth({ harmonicity: 5.07, modulationIndex: 1.5, envelope: { attack: 0.001, decay: 0.6, sustain: 0, release: 0.4 }, modulationEnvelope: { attack: 0.001, decay: 0.08, sustain: 0 } }).connect(out);
     I.kalimba.volume.value = -12;
-    I.drone = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "custom", partials: [1, 0.2, 0.5, 0.1, 0.25] }, envelope: { attack: 1.2, decay: 0.5, sustain: 0.8, release: 2 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 1100 }).connect(out));
+    I.drone = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "custom", partials: [1, 0.2, 0.5, 0.1, 0.25] }, envelope: { attack: 1.2, decay: 0.5, sustain: 0.8, release: 2 } }).connect(LF({ type: "lowpass", frequency: 1100 }).connect(out));
     I.drone.maxPolyphony = 6; I.drone.volume.value = -18;
     I.bird = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.005, decay: 0.05, sustain: 0.3, release: 0.03 }, portamento: 0.025 }).connect(new Tone.FeedbackDelay({ delayTime: "16n", feedback: 0.2, wet: 0.2 }).connect(out));
     I.bird.volume.value = -18;
-    const breath = new Tone.NoiseSynth({ noise: { type: "pink" }, envelope: { attack: 0.02, decay: 0.08, sustain: 0 } }).connect(new Tone.Filter({ type: "bandpass", frequency: 2500, Q: 1 }).connect(out));
+    const breath = new Tone.NoiseSynth({ noise: { type: "pink" }, envelope: { attack: 0.02, decay: 0.08, sustain: 0 } }).connect(LF({ type: "bandpass", frequency: 2500, Q: 1 }).connect(out));
     breath.volume.value = -24; I._breath = breath;
-    I.flute = new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.04, decay: 0.1, sustain: 0.8, release: 0.12 }, portamento: 0.01 }).connect(new Tone.Vibrato(5, 0.06).connect(new Tone.Filter({ type: "lowpass", frequency: 4200 }).connect(out)));
+    I.flute = new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.04, decay: 0.1, sustain: 0.8, release: 0.12 }, portamento: 0.01 }).connect(new Tone.Vibrato(5, 0.06).connect(LF({ type: "lowpass", frequency: 4200 }).connect(out)));
     I.flute.volume.value = -11;
-    I.reed = new Tone.Synth({ oscillator: { type: "square" }, envelope: { attack: 0.05, decay: 0.15, sustain: 0.7, release: 0.15 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 1300, Q: 1.5 }).connect(out));
+    I.reed = new Tone.Synth({ oscillator: { type: "square" }, envelope: { attack: 0.05, decay: 0.15, sustain: 0.7, release: 0.15 } }).connect(LF({ type: "lowpass", frequency: 1300, Q: 1.5 }).connect(out));
     I.reed.volume.value = -14;
     return I;
   },
@@ -1182,10 +1191,10 @@ defineSet({
   },
   build(out) {
     const I = {};
-    const crush = new Tone.Distortion({ distortion: 0.5, oversample: "none" }); crush.chain(new Tone.Filter({ type: "lowpass", frequency: 2800 }), out);   // lo-fi grit without an audio worklet
+    const crush = new Tone.Distortion({ distortion: 0.5, oversample: "none" }); crush.chain(LF({ type: "lowpass", frequency: 2800 }), out);   // lo-fi grit without an audio worklet
     I.kick = new Tone.MembraneSynth({ pitchDecay: 0.06, octaves: 5, envelope: { attack: 0.001, decay: 0.3, sustain: 0 } }).connect(crush);
     I.kick.volume.value = -4;
-    I.click = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.02, sustain: 0 } }).connect(new Tone.Filter({ type: "bandpass", frequency: 3500, Q: 3 }).connect(crush));
+    I.click = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.02, sustain: 0 } }).connect(LF({ type: "bandpass", frequency: 3500, Q: 3 }).connect(crush));
     I.click.volume.value = -10;
     I.bass = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.7, release: 0.2 }, portamento: 0.12 }).connect(out);
     I.bass.volume.value = -3;
@@ -1194,7 +1203,7 @@ defineSet({
     const trem = new Tone.Tremolo(4, 0.6).start(), cho = new Tone.Chorus(0.8, 4, 0.7).start();
     trem.chain(cho, out);
     I.glass = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "sine" }, envelope: { attack: 0.5, decay: 0.3, sustain: 0.8, release: 1.6 } }).connect(trem);
-    I.glass.maxPolyphony = 8; I.glass.volume.value = -14;
+    I.glass.maxPolyphony = 6; I.glass.volume.value = -14;
     I.vox = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.12, decay: 0.2, sustain: 0.85, release: 0.5 }, portamento: 0.15 }).connect(new Tone.Vibrato(6, 0.14).connect(new Tone.FeedbackDelay({ delayTime: "4n", feedback: 0.3, wet: 0.25 }).connect(out)));
     I.vox.volume.value = -13;
     I.bell = new Tone.FMSynth({ harmonicity: 3.5, modulationIndex: 10, envelope: { attack: 0.001, decay: 2.2, sustain: 0, release: 1.5 }, modulationEnvelope: { attack: 0.001, decay: 0.6, sustain: 0.1 } }).connect(out);
@@ -1437,7 +1446,7 @@ function killNodes(list) { for (const n of list) { try { if (typeof n.stop === "
 function ensureSet(id) {
   if (!nodes || RT[id]) return RT[id];
   const [r, made] = captureNodes(() => {
-    const bus = new Tone.Gain(0.45), lp = new Tone.Filter({ type: "lowpass", frequency: 2600, rolloff: -12 }), out = new Tone.Volume(-4);
+    const bus = new Tone.Gain(0.45), lp = LF({ type: "lowpass", frequency: 2600, rolloff: -12 }), out = new Tone.Volume(-4);
     bus.chain(lp, out);
     const I = SETS[id].build(bus);
     return { bus, lp, I, out, soloOut: new Tone.Gain(1), wired: false, idle: 0 };
@@ -1458,7 +1467,11 @@ function wireSet(id, on) {
   r.wired = on;
   if (on) { r.out.connect(nodes.setMaster); r.soloOut.connect(nodes.setMaster); } else { r.out.disconnect(); r.soloOut.disconnect(); }
 }
+// Tone's PolySynth disposes an idle voice every second and builds a new one on the next chord: a constant churn of
+// ~15 new audio nodes per chord, which stalls the main thread (slowdowns) and the audio thread. Keep voices instead.
+function keepVoices(obj) { for (const v of Object.values(obj || {})) if (v instanceof Tone.PolySynth && v._gcTimeout !== undefined) { try { v.context.clearInterval(v._gcTimeout); } catch (e) {} } }
 function wrapSet(setId, I) {
+  keepVoices(I);
   for (const k of Object.keys(I)) {
     const inst = I[k];
     if (k === "solo" || !inst || typeof inst.triggerAttackRelease !== "function") continue;
@@ -1607,7 +1620,7 @@ let ctxReady = false;
 async function startAudio() {
   if (playing) return;
   await Tone.start();
-  if (!nodes) { nodes = build(); applyVol(); applyLite(); try { await nodes.reverb.ready; } catch (e) {} }
+  if (!nodes) { nodes = build(); keepVoices(nodes); applyVol(); applyLite(); try { await nodes.reverb.ready; } catch (e) {} }
   for (const s of STEMS) { const o = s.wanted && !s.dropped; s.fader.gain.cancelScheduledValues(0); s.fader.gain.value = o ? 1 : 0; s.gate = s.wanted; s.state = s.dropped ? "dropped" : (s.wanted ? "on" : "off"); }
   Tone.Transport.bpm.value = baseBpm;
   Tone.Transport.position = 0;
@@ -1735,14 +1748,14 @@ function watchLate(time) {
   const now = performance.now(); lateTicks = lateTicks.filter(t => now - t < 8000); lateTicks.push(now);
   if (lateTicks.length < 4) return;
   lateTicks = [];
-  setTimeout(() => { OPT().lite = true; persist(); applyLite(); banner("Lighter audio on", "The music was falling behind. Change it in Options."); }, 0);
+  setTimeout(() => { OPT().lite = true; persist(); applyLite(); banner("Lighter audio on", "The music was falling behind. Reload for the full effect, or change it in Options."); }, 0);
 }
 function applyOpts() { const o = OPT(); applyVol(); applyLite(); document.documentElement.style.setProperty("--ui", o.ui); document.getElementById("app").classList.toggle("calm", !!o.calm); }
 function optionsHTML() { const o = OPT(); const vol = (k, name) => `<label class="vol">${name} <input type="range" min="0" max="1" step="0.05" value="${o[k]}" data-opt="${k}" aria-label="${name} volume"><output>${Math.round(o[k] * 100)}%</output></label>`;
   return `<div class="opts vols">${vol("vMaster", "Master")}${vol("vMusic", "Music")}${vol("vSfx", "Effects and ambience")}</div><div class="opts">
   <label><input type="checkbox" data-opt="dmg" ${o.dmg ? "checked" : ""}> Floating damage numbers</label>
   <label><input type="checkbox" data-opt="calm" ${o.calm ? "checked" : ""}> Reduce flashing and pulsing</label>
-  <label title="Turns off the reverb tail and lens ambience and gives the music a bigger buffer. Helps when streaming or on older PCs."><input type="checkbox" data-opt="lite" ${o.lite ? "checked" : ""}> Lighter audio (streaming, older PCs)</label>
+  <label title="Turns off the reverb tail and lens ambience and gives the music a bigger buffer. Helps when streaming or on older PCs."><input type="checkbox" data-opt="lite" ${o.lite ? "checked" : ""}> Lighter audio (streaming, older PCs; fully applies after a page reload)</label>
   <label>Screen shake <input type="range" min="0" max="1" step="0.25" value="${o.shake}" data-opt="shake"><output>${Math.round(o.shake * 100)}%</output></label>
   <label>UI size <input type="range" min="0.8" max="1.3" step="0.05" value="${o.ui}" data-opt="ui"><output>${Math.round(o.ui * 100)}%</output></label></div>`; }
 function bindOptions(root) { root.querySelectorAll("[data-opt]").forEach(el => el.addEventListener("input", () => { const o = OPT(), k = el.dataset.opt; o[k] = el.type === "checkbox" ? el.checked : +el.value; const out = el.parentElement.querySelector("output"); if (out) out.textContent = Math.round(o[k] * 100) + "%"; persist(); applyOpts(); if (k === "ui") resize(); })); }
@@ -2059,26 +2072,26 @@ function ambInit() {
   const bus = new Tone.Gain(1).connect(nodes.sfxG);
   // fire: low ember roar + random pops
   const fireG = new Tone.Gain(0).connect(bus);
-  const roar = new Tone.Noise("brown"); roar.volume.value = -22; roar.chain(new Tone.Filter({ type: "lowpass", frequency: 420 }), fireG);
-  const popF = new Tone.Filter({ type: "bandpass", frequency: 2600, Q: 1.2 }).connect(fireG);
+  const roar = new Tone.Noise("brown"); roar.volume.value = -22; roar.chain(LF({ type: "lowpass", frequency: 420 }), fireG);
+  const popF = LF({ type: "bandpass", frequency: 2600, Q: 1.2 }).connect(fireG);
   const pop = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01 } }).connect(popF); pop.volume.value = -8;
   // cold: band-passed pink noise whose pitch and level wander
   const coldG = new Tone.Gain(0).connect(bus);
-  const windF = new Tone.Filter({ type: "bandpass", frequency: 600, Q: 2.2 });
+  const windF = LF({ type: "bandpass", frequency: 600, Q: 2.2 });
   const windV = new Tone.Gain(0.5);
   const wind = new Tone.Noise("pink"); wind.volume.value = -6; wind.chain(windF, windV, coldG);
   // lightning: rain hiss + rumbles
   const ltG = new Tone.Gain(0).connect(bus);
-  const rain = new Tone.Noise("pink"); rain.volume.value = -24; rain.chain(new Tone.Filter({ type: "highpass", frequency: 3200 }), ltG);
-  const rumbleF = new Tone.Filter({ type: "lowpass", frequency: 260 }).connect(ltG);
+  const rain = new Tone.Noise("pink"); rain.volume.value = -24; rain.chain(LF({ type: "highpass", frequency: 3200 }), ltG);
+  const rumbleF = LF({ type: "lowpass", frequency: 260 }).connect(ltG);
   const rumble = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.25, decay: 2.2, sustain: 0, release: 0.5 } }).connect(rumbleF); rumble.volume.value = -4;
   // stun crash bypasses the duck bus so it lands extra loud
   const crashBus = new Tone.Gain(1.4).connect(nodes.sfxG);
   const crash = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.002, decay: 0.9, sustain: 0, release: 0.4 } });
-  crash.chain(new Tone.Filter({ type: "lowpass", frequency: 5200 }), crashBus); crash.volume.value = 2;
+  crash.chain(LF({ type: "lowpass", frequency: 5200 }), crashBus); crash.volume.value = 2;
   const boom = new Tone.MembraneSynth({ pitchDecay: 0.25, octaves: 5, envelope: { attack: 0.002, decay: 1.4, sustain: 0, release: 0.4 } }).connect(crashBus); boom.volume.value = 2;
   const boomTail = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.05, decay: 2.6, sustain: 0, release: 0.6 } });
-  boomTail.chain(new Tone.Filter({ type: "lowpass", frequency: 320 }), crashBus); boomTail.volume.value = 4;
+  boomTail.chain(LF({ type: "lowpass", frequency: 320 }), crashBus); boomTail.volume.value = 4;
   amb = { bus, fireG, pop, popF, coldG, windF, windV, ltG, rumble, crash, boom, boomTail, lastCrash: 0, lastRumble: 0, src: { fireG: roar, coldG: wind, ltG: rain }, lv: {} };
   return amb;
 }
@@ -2329,6 +2342,10 @@ function choosePilot(id) {
   if (!run || run.pilot) return;
   const p = PILOTS[id]; run.pilot = id; save.pilot = id; persist();
   applyCard({ type: "new", id: p.start }); stemOn("beat");
+  if (save.dev && save.devSet) {   // Test mode: start wearing a full set (any set, any pilot) to check how it sounds and plays
+    const [sid, v] = save.devSet.split(":"), S = SETS[sid];
+    if (S) for (const k of Object.keys(PIECE).filter(k => PIECE[k].set === sid && !PIECE[k].hands).concat(v === "pair" ? S.special.pair : [S.special.two])) applyCard({ type: "gear", id: k });
+  }
   if (id === "knight") { P.maxHp += 25; P.hp += 25; }
   if (id === "ranger") { run.speedMul = 1.12; run.dashMul = 0.8; }
   if (id === "mage") { const els = Object.keys(EL); run.lens.push({ el: els[Math.floor(Math.random() * els.length)], lv: 1 }); lensSound(); ambUpdate(); }
@@ -2575,9 +2592,9 @@ function lensSound(clear) {
     if (!lv) { if (g0 && lensFx.wired[el]) { g0.gain.rampTo(0, 0.4); lensFx.wired[el] = false; setTimeout(() => { if (!lensFx.wired[el]) g0.disconnect(); }, 600); } continue; }
     if (!g0) {
       const g = new Tone.Gain(0);
-      const chain = el === "fire" ? [new Tone.Distortion({ distortion: 0.6, oversample: "none" }), new Tone.Filter({ type: "lowpass", frequency: 3600 })]
-      : el === "cold" ? [new Tone.Filter({ type: "highpass", frequency: 900 }), new Tone.FeedbackDelay({ delayTime: "8n.", feedback: 0.5, wet: 1 }), new Tone.Filter({ type: "lowpass", frequency: 7000 })]
-      : [new Tone.Distortion({ distortion: 1, oversample: "none" }), new Tone.Filter({ type: "highpass", frequency: 2200 }), new Tone.Tremolo(16, 0.9).start()];
+      const chain = el === "fire" ? [new Tone.Distortion({ distortion: 0.6, oversample: "none" }), LF({ type: "lowpass", frequency: 3600 })]
+      : el === "cold" ? [LF({ type: "highpass", frequency: 900 }), new Tone.FeedbackDelay({ delayTime: "8n.", feedback: 0.5, wet: 1 }), LF({ type: "lowpass", frequency: 7000 })]
+      : [new Tone.Distortion({ distortion: 1, oversample: "none" }), LF({ type: "highpass", frequency: 2200 }), new Tone.Tremolo(16, 0.9).start()];
       lensFx.in.chain(...chain, g);
       lensFx.g[el] = g;
     }
@@ -2643,7 +2660,7 @@ function showHub() {
     <div class="bar xp" title="XP to next level"><i style="width:${save.dev ? 100 : Math.round(save.xp / need * 100)}%"></i></div>
     <div class="row-actions"><button class="btn primary" id="startBtn" type="button">Start run <kbd>Enter</kbd></button>
       <label class="check"><input type="checkbox" id="idleChk" ${save.idle ? "checked" : ""}> Idle mode: auto-pick rewards after 10 s</label>
-      <label class="check"><input type="checkbox" id="devChk" ${save.dev ? "checked" : ""}> Test mode: unlock everything</label></div>
+      <label class="check"><input type="checkbox" id="devChk" ${save.dev ? "checked" : ""}> Test mode: unlock everything</label>${save.dev ? `<label class="check">Start runs with a full set <select id="devSet"><option value="">None</option>${Object.keys(SETS).map(id => { const sp = SETS[id].special, nm = k => PIECE[k] ? PIECE[k].item : k; return `<option value="${id}:two" ${save.devSet === id + ":two" ? "selected" : ""}>${SETS[id].name}, ${nm(sp.two)}</option><option value="${id}:pair" ${save.devSet === id + ":pair" ? "selected" : ""}>${SETS[id].name}, ${sp.pair.map(nm).join(" + ")}</option>`; }).join("")}</select></label>` : ""}</div>
     <div class="cols">
       <div class="list"><h3>Permanent unlocks</h3>${SHOP.map(s => { const n = save.owned[s.id] || 0, max = s.max || 1, done = save.dev || n >= max; return `<div class="item ${done ? "own" : ""}"><div><b>${s.name}${max > 1 ? ` ${save.dev ? max : n}/${max}` : ""}</b><span>${s.desc}</span></div>${done ? `<span style="font-size:.78rem;color:var(--ok)">Owned</span>` : `<button class="btn small" type="button" data-buy="${s.id}" ${save.royalties < s.cost ? "disabled" : ""}>${s.cost} R</button>`}</div>`; }).join("")}</div>
       <div class="list"><h3>Level rewards</h3><div class="perks">${PERKS.map(([l, t]) => `<span class="${effLevel() >= l ? "got" : "next"}">Level ${l}: ${t}</span>`).join("")}</div>
@@ -2666,6 +2683,7 @@ function showHub() {
   bindOptions(screenEl);
   document.getElementById("idleChk").addEventListener("change", e => { save.idle = e.target.checked; persist(); });
   document.getElementById("devChk").addEventListener("change", e => { save.dev = e.target.checked; persist(); showHub(); });
+  const devSel = document.getElementById("devSet"); if (devSel) devSel.addEventListener("change", e => { save.devSet = e.target.value; persist(); });
   screenEl.querySelectorAll("[data-buy]").forEach(b => b.addEventListener("click", () => { const s = SHOP.find(x => x.id === b.dataset.buy); if (save.royalties >= s.cost) { save.royalties -= s.cost; save.owned[s.id] = (save.owned[s.id] || 0) + 1; persist(); showHub(); } }));
   screenEl.querySelectorAll("[data-ban]").forEach(b => b.addEventListener("click", () => { const id = b.dataset.ban; const i = save.bans.indexOf(id); if (i >= 0) save.bans.splice(i, 1); else if (save.bans.length < banSlots()) save.bans.push(id); persist(); showHub(); }));
 }
