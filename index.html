@@ -787,7 +787,7 @@ let counter = 0;
 
 function def(o) { STEMS.push(Object.assign({ wanted: false, dropped: false, gate: false, order: 0, state: "off" }, o)); }
 
-def({ id: "beat", key: "0", power: "Base beat", layer: "EDM kick and hi-hats", slot: "BEAT", color: "#ffd166", db: -2, send: 0, base: true,
+def({ id: "beat", key: "0", power: "Base beat", layer: "Pilot pulse: each pilot's own quiet beat", slot: "BEAT", color: "#ffd166", db: -9, send: 0, base: true,
       fx: "Sets the attack tempo. On from the first second of a run." });
 def({ id: "flute", key: "1", power: "Sword", layer: "Flute melody", slot: "LEAD", color: "#7ef0c8", db: -9, send: .35,
       fx: "Extra slash that fires homing notes." });
@@ -1253,6 +1253,7 @@ const LV = id => (run && run.lv.get(id)) || 1;
 
 const SOLO_LIFT = { strings: 24, pads: 17, funk: 16, arp: 13, choir: 12 };   // dB each needs to match the flute when played alone
 function tick(time) {
+  watchLate(time);
   const ticks = Tone.Transport.getTicksAtTime(time);
   const abs = Math.round(ticks / (Tone.Transport.PPQ / 4));
   const step = abs % STEPS;
@@ -1272,6 +1273,7 @@ function tick(time) {
     // Background parts (strings, pads, arp...) measure 12-25 dB under the Sword's flute when heard alone. Early in a run they
     // may be the whole band (Ranger opens with only the Comet Bow), so lift them toward lead level until the band fills out.
     const band = layers().filter(s => s.wanted).length + equipped.size, share = [0, 1, 0.7, 0.45, 0.2][band] || 0;
+    const bt = byId("beat"), bv = -9 - 1.5 * Math.min(band, 6); if (bt.lift !== bv) { bt.lift = bv; bt.vol.volume.cancelScheduledValues(time); bt.vol.volume.setValueAtTime(bt.vol.volume.getValueAtTime(time), time); bt.vol.volume.linearRampToValueAtTime(bv, time + 0.4); }
     for (const s of layers()) { const lift = Math.round((SOLO_LIFT[s.id] || 0) * share); if (s.lift !== lift) { s.lift = lift; const v = s.vol.volume; v.cancelScheduledValues(time); v.setValueAtTime(v.getValueAtTime(time), time); v.linearRampToValueAtTime(s.db + lift, time + 0.4); } }
     pilotNow = byId("rock").wanted;
     for (const id in SETS) setNow[id] = membersOf(id);
@@ -1308,10 +1310,22 @@ function tick(time) {
 
   const on = id => byId(id).gate;
 
+  // Pilot pulse: each pilot's own quiet base beat, under everything else (music only, no attacks)
   if (on("beat")) {
-    if (inBar % 4 === 0) { n.kick.triggerAttackRelease("C1", "8n", time, 1); E("kick"); }
-    if (inBar % 4 === 2) n.ohat.triggerAttackRelease("16n", time, 0.6);
-    else n.hat.triggerAttackRelease("32n", time, inBar % 2 ? 0.35 : 0.55);
+    const pk = run && run.pilot;
+    if (pk === "ranger") {          // hand drums: low frame drum in 3+3+2, shaker sixteenths with a push-pull accent
+      if (inBar === 0 || inBar === 6 || inBar === 12) n.kick.triggerAttackRelease(inBar === 0 ? "A1" : "D2", "16n", time, inBar === 0 ? 0.8 : 0.5);
+      n.hat.triggerAttackRelease("32n", time, [0.5, 0.18, 0.3, 0.22][inBar % 4]);
+    } else if (pk === "mage") {     // swung and lopsided: kick on 1 and a late 2, hats grouped 3+3+2, a ghost open hat
+      const sw = inBar % 2 ? d * 0.34 : 0;
+      if (inBar === 0 || inBar === 7) n.kick.triggerAttackRelease("C1", "16n", time + sw, inBar ? 0.55 : 0.85);
+      if ([0, 3, 6, 8, 11, 14].includes(inBar)) n.hat.triggerAttackRelease("32n", time + sw, inBar % 8 === 0 ? 0.5 : 0.32);
+      if (inBar === 13) n.ohat.triggerAttackRelease("16n", time + sw, 0.3);
+    } else {                        // Knight: rock backbeat, kick on 1 and the and of 3, open hat on 2 and 4, eighth hats
+      if (inBar === 0 || inBar === 10) n.kick.triggerAttackRelease("C1", "8n", time, 1);
+      if (inBar === 4 || inBar === 12) n.ohat.triggerAttackRelease("16n", time, 0.55);
+      else if (inBar % 2 === 0) n.hat.triggerAttackRelease("32n", time, inBar % 4 === 0 ? 0.5 : 0.35);
+    }
   }
   // Sword: Lv1 one note per half bar, Lv2 one per beat, Lv3 the full flute melody
   if (on("flute")) {
@@ -1593,7 +1607,7 @@ let ctxReady = false;
 async function startAudio() {
   if (playing) return;
   await Tone.start();
-  if (!nodes) { nodes = build(); applyVol(); try { await nodes.reverb.ready; } catch (e) {} }
+  if (!nodes) { nodes = build(); applyVol(); applyLite(); try { await nodes.reverb.ready; } catch (e) {} }
   for (const s of STEMS) { const o = s.wanted && !s.dropped; s.fader.gain.cancelScheduledValues(0); s.fader.gain.value = o ? 1 : 0; s.gate = s.wanted; s.state = s.dropped ? "dropped" : (s.wanted ? "on" : "off"); }
   Tone.Transport.bpm.value = baseBpm;
   Tone.Transport.position = 0;
@@ -1694,7 +1708,7 @@ const BAND = { 3: "Trio", 4: "Quartet", 5: "Quintet", 6: "Sextet" };
 
 // ---------- Account save (this browser only) ----------
 const SAVE_KEY = "gw-gig-run-v1";
-function defaultSave() { return { xp: 0, level: 1, royalties: 0, owned: {}, bans: [], runs: 0, wins: 0, bestRoom: 0, dev: false, idle: false, opts: { dmg: true, shake: 1, calm: false, ui: 1, vMaster: 0.5, vMusic: 1, vSfx: 1 } }; }
+function defaultSave() { return { xp: 0, level: 1, royalties: 0, owned: {}, bans: [], runs: 0, wins: 0, bestRoom: 0, dev: false, idle: false, opts: { dmg: true, shake: 1, calm: false, lite: false, ui: 1, vMaster: 0.5, vMusic: 1, vSfx: 1 } }; }
 let save = defaultSave();
 try { const j = JSON.parse(localStorage.getItem(SAVE_KEY) || "null"); if (j) save = Object.assign(defaultSave(), j); } catch (e) {}
 if (save.owned.metal) { save.owned["set-pm"] = 1; delete save.owned.metal; }
@@ -1704,11 +1718,31 @@ const OPT = () => (save.opts = Object.assign({ dmg: true, shake: 1, calm: false,
 if (save.volDefault !== 2) { const o = OPT(); o.vMaster = Math.min(o.vMaster, 0.5); save.volDefault = 2; persist(); }
 function applyVol() { if (!nodes) return; const o = OPT(); try { Tone.Destination.mute = o.vMaster <= 0; if (o.vMaster > 0) Tone.Destination.volume.value = Tone.gainToDb(o.vMaster * o.vMaster); } catch (e) {}
   if (nodes) { nodes.musicG.gain.rampTo(o.vMusic * o.vMusic, 0.05); nodes.sfxG.gain.rampTo(o.vSfx * o.vSfx, 0.05); } }
-function applyOpts() { const o = OPT(); applyVol(); document.documentElement.style.setProperty("--ui", o.ui); document.getElementById("app").classList.toggle("calm", !!o.calm); }
+// Lighter audio, for streaming or older PCs: no reverb tail, no ambience beds, a longer scheduling buffer
+function applyLite() {
+  const on = !!OPT().lite;
+  try { Tone.context.lookAhead = on ? 0.32 : 0.2; } catch (e) {}
+  if (!nodes || on === !!nodes.liteOn) return;
+  nodes.liteOn = on;
+  try { if (on) nodes.reverb.disconnect(); else nodes.reverb.connect(nodes.master); } catch (e) {}
+  if (run) ambUpdate();
+}
+// If the music scheduler keeps running late (another program is loading the PC, e.g. streaming), switch to lighter audio once
+let lateTicks = [];
+function watchLate(time) {
+  if (OPT().lite || OPT().liteAuto === false || document.hidden || !run || paused) return;
+  if (time - Tone.context.currentTime > 0.05) return;
+  const now = performance.now(); lateTicks = lateTicks.filter(t => now - t < 8000); lateTicks.push(now);
+  if (lateTicks.length < 4) return;
+  lateTicks = [];
+  setTimeout(() => { OPT().lite = true; persist(); applyLite(); banner("Lighter audio on", "The music was falling behind. Change it in Options."); }, 0);
+}
+function applyOpts() { const o = OPT(); applyVol(); applyLite(); document.documentElement.style.setProperty("--ui", o.ui); document.getElementById("app").classList.toggle("calm", !!o.calm); }
 function optionsHTML() { const o = OPT(); const vol = (k, name) => `<label class="vol">${name} <input type="range" min="0" max="1" step="0.05" value="${o[k]}" data-opt="${k}" aria-label="${name} volume"><output>${Math.round(o[k] * 100)}%</output></label>`;
   return `<div class="opts vols">${vol("vMaster", "Master")}${vol("vMusic", "Music")}${vol("vSfx", "Effects and ambience")}</div><div class="opts">
   <label><input type="checkbox" data-opt="dmg" ${o.dmg ? "checked" : ""}> Floating damage numbers</label>
   <label><input type="checkbox" data-opt="calm" ${o.calm ? "checked" : ""}> Reduce flashing and pulsing</label>
+  <label title="Turns off the reverb tail and lens ambience and gives the music a bigger buffer. Helps when streaming or on older PCs."><input type="checkbox" data-opt="lite" ${o.lite ? "checked" : ""}> Lighter audio (streaming, older PCs)</label>
   <label>Screen shake <input type="range" min="0" max="1" step="0.25" value="${o.shake}" data-opt="shake"><output>${Math.round(o.shake * 100)}%</output></label>
   <label>UI size <input type="range" min="0.8" max="1.3" step="0.05" value="${o.ui}" data-opt="ui"><output>${Math.round(o.ui * 100)}%</output></label></div>`; }
 function bindOptions(root) { root.querySelectorAll("[data-opt]").forEach(el => el.addEventListener("input", () => { const o = OPT(), k = el.dataset.opt; o[k] = el.type === "checkbox" ? el.checked : +el.value; const out = el.parentElement.querySelector("output"); if (out) out.textContent = Math.round(o[k] * 100) + "%"; persist(); applyOpts(); if (k === "ui") resize(); })); }
@@ -2052,7 +2086,7 @@ function elCount(el) { if (!run || !run.lens) return 0; let n = lensLv(el); if (
 function ambUpdate(time) {
   if (!nodes || !run) return;
   const lvl = n => n ? Math.min(1, 0.6 + 0.2 * n) : 0;
-  const want = { fireG: lvl(elCount("fire")), coldG: lvl(elCount("cold")), ltG: lvl(elCount("lightning")) };
+  const want = OPT().lite ? {} : { fireG: lvl(elCount("fire")), coldG: lvl(elCount("cold")), ltG: lvl(elCount("lightning")) };
   if (!amb && !want.fireG && !want.coldG && !want.ltG) return;
   ambBeds(want, time);
 }
@@ -2268,7 +2302,7 @@ function newRun() {
   run = { room: 0, act: 1, type: "start", mode: "choice", kills: 0, lv: new Map(), lens: [], lensIdx: 0, tips: 0, vol: 0, tempo: 0, sub: 0, rerolls: ownedN("reroll"), fightOver: false, pendingReward: false, spawnPending: false, waves: [], path: [], started: performance.now(), miniDown: false, bossDown: false };
   P.maxHp = hp; P.hp = hp; P.x = AW / 2; P.y = AH / 2; P.hitUntil = 0; P.gongUntil = 0;
   enemies = []; shots = []; bullets = []; fx = []; texts = [];
-  for (const s of STEMS) { s.silenced = 0; if (!s.base) stemOff(s.id, true); }
+  for (const s of STEMS) { s.silenced = 0; stemOff(s.id, true); }
   equipped.clear(); for (const k in gearOrder) delete gearOrder[k];
   cooldownUntil = 0; invulnUntil = 0;
   baseBpm = 128; resetAudio();
@@ -2294,7 +2328,7 @@ function showPilots() {
 function choosePilot(id) {
   if (!run || run.pilot) return;
   const p = PILOTS[id]; run.pilot = id; save.pilot = id; persist();
-  applyCard({ type: "new", id: p.start });
+  applyCard({ type: "new", id: p.start }); stemOn("beat");
   if (id === "knight") { P.maxHp += 25; P.hp += 25; }
   if (id === "ranger") { run.speedMul = 1.12; run.dashMul = 0.8; }
   if (id === "mage") { const els = Object.keys(EL); run.lens.push({ el: els[Math.floor(Math.random() * els.length)], lv: 1 }); lensSound(); ambUpdate(); }
@@ -2326,7 +2360,7 @@ function endRun(won) {
   if (!run || run.mode === "over") return;
   run.mode = "over";
   const roomsCleared = won ? run.room : Math.max(0, run.room - 1);
-  for (const s of STEMS) if (!s.base) stemOff(s.id, true);
+  for (const s of STEMS) stemOff(s.id, true);
   equipped.clear();
   if (specialPhase === "windup") specialAbort = true; else specialPhase = null;
   specialPending = false;
