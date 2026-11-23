@@ -780,6 +780,298 @@ function build() {
 }
 
 // =====================================================================
+// Starter sets: one per pilot. Knight = rock and roll, Ranger = woodwinds and hand percussion,
+// Mage = wonky, mystical bells and theremin. All original parts over the same Am F C G loop.
+// =====================================================================
+const STARTER = { kn: "knight", rg: "ranger", mg: "mage" };
+const PENTA = [0, 3, 5, 7, 10];
+const pent = (root, i) => root + PENTA[((i % 5) + 5) % 5] + 12 * Math.floor(i / 5);
+const nn = m => Tone.Frequency(m, "midi").toNote();
+
+// ---------------- Knight: rock and roll ----------------
+const KN_LEAD = melody([
+  [16,"E5",4],[20,"D5",2],[22,"C5",2],[24,"A4",8],
+  [48,"A4",2],[50,"C5",2],[52,"D5",2],[54,"E5",4],[58,"G5",2],[60,"E5",4],
+  [80,"C5",2],[82,"D5",2],[84,"E5",4],[88,"G5",4],[92,"A5",4],
+  [112,"A5",3],[115,"G5",1],[116,"E5",2],[118,"D5",2],[120,"C5",2],[122,"A4",6],
+]);
+defineSet({
+  id: "kn", name: "Knight", color: "#ffb347", key: "K",
+  loose: "Loose: a garage band warming up", tight: "Locked in: full rock and roll",
+  pieces: [
+    { id: "kn-greaves",  body: "legs",  covers: ["drums"], item: "Squire Greaves",   member: "Rock drummer",  adds: "backbeat drums" },
+    { id: "kn-belt",     body: "waist", covers: ["bass"],  item: "Buckle Belt",      member: "Bass player",   adds: "boogie bass line" },
+    { id: "kn-gauntlets",body: "arms",  covers: ["piano"], item: "Boogie Gauntlets", member: "Piano player",  adds: "honky-tonk piano stabs" },
+    { id: "kn-tabard",   body: "back",  covers: ["organ"], item: "Organ Tabard",     member: "Organist",      adds: "held organ chords" },
+    { id: "kn-helm",     body: "head",  covers: ["vox"],   item: "Great Helm",       member: "Backing vocals", adds: "“hey!” shouts and “aah” backing" },
+    { id: "kn-greatsword", hands: 2, covers: ["rhythm", "lead"], item: "Knight's Greatsword", member: "Rhythm + lead guitar", adds: "shuffle riff and pentatonic licks", note: "Two-handed · counts as 2" },
+    { id: "kn-sword",    hands: 1, covers: ["rhythm"], item: "Arming Sword", member: "Rhythm guitar", adds: "shuffle riff", note: "One-handed" },
+    { id: "kn-shield",   hands: 1, covers: ["lead"],   item: "Kite Shield",  member: "Lead guitar",   adds: "pentatonic licks", note: "One-handed" },
+  ],
+  special: {
+    name: "Rock Anthem", duel: "Sword and shield duel", two: "kn-greatsword", pair: ["kn-sword", "kn-shield"], duelOffset: 0,
+    voice:  { osc: "sawtooth", dist: 0.7, lp: 3600, delay: "8n", wet: 0.18, vibF: 5.5, vibD: 0.03, port: 0.03, vol: -14 },
+    voiceB: { osc: "square", dist: 0.5, lp: 2600, delay: "8n", wet: 0.18, vibF: 5, vibD: 0.02, port: 0.02, vol: -15 },
+    // pentatonic runs, bends, a fast descent, tremolo picking, then a climb to the top
+    line(sb, c) {
+      const root = mid(c.arp[0]) - 12, out = [];
+      if (sb === 0) { for (let i = 0; i < 16; i++) out.push(pent(root + 12, [0,1,2,3,4,5,4,3,2,3,4,5,6,5,4,3][i])); return { notes: out, sub: 1 }; }
+      if (sb === 1) { for (let i = 0; i < 16; i++) out.push(i % 4 === 3 ? root + 24 : root + 22 + (i % 2) * 2); return { notes: out, sub: 1 }; }
+      if (sb === 2) { for (let i = 0; i < 16; i++) out.push(pent(root + 12, 10 - i)); return { notes: out, sub: 1 }; }
+      if (sb === 3) { for (let i = 0; i < 32; i++) out.push(i % 2 ? root + 27 : root + 24); return { notes: out, sub: 2 }; }
+      for (let i = 0; i < 32; i++) out.push(pent(root + 12, Math.floor(i * 10 / 31)));
+      return { notes: out, sub: 2 };
+    },
+  },
+  build(out) {
+    const I = {};
+    I.kick = new Tone.MembraneSynth({ pitchDecay: 0.04, octaves: 4, envelope: { attack: 0.001, decay: 0.28, sustain: 0 } }).connect(out);
+    const snBP = new Tone.Filter({ type: "bandpass", frequency: 2000, Q: 0.8 }).connect(out);
+    I.snare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.14, sustain: 0 } }).connect(snBP);
+    I.ride = new Tone.MetalSynth({ envelope: { attack: 0.001, decay: 0.25, release: 0.05 }, harmonicity: 5.1, modulationIndex: 20, resonance: 5000, octaves: 1 }).connect(out);
+    I.ride.volume.value = -26; I.ride.frequency.value = 300;
+    I.bass = new Tone.MonoSynth({ oscillator: { type: "triangle" }, filter: { Q: 1, type: "lowpass" }, envelope: { attack: 0.003, decay: 0.15, sustain: 0.5, release: 0.05 },
+      filterEnvelope: { attack: 0.002, decay: 0.12, sustain: 0.3, baseFrequency: 300, octaves: 2 } }).connect(out);
+    I.bass.volume.value = -4;
+    I.piano = new Tone.PolySynth(Tone.FMSynth, { harmonicity: 2, modulationIndex: 3, envelope: { attack: 0.002, decay: 0.35, sustain: 0.05, release: 0.2 }, modulationEnvelope: { attack: 0.002, decay: 0.2, sustain: 0 } }).connect(out);
+    I.piano.maxPolyphony = 8; I.piano.volume.value = -15;
+    const rot = new Tone.Tremolo(6, 0.35).start(); rot.connect(out);
+    I.organ = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "custom", partials: [1, 0.6, 0.45, 0.25, 0.15, 0.1] }, envelope: { attack: 0.03, decay: 0.1, sustain: 0.9, release: 0.3 } }).connect(rot);
+    I.organ.maxPolyphony = 8; I.organ.volume.value = -19;
+    const voxIn = new Tone.Gain(1);
+    I.voxF = mkFormant(voxIn, VOWEL.a, new Tone.Gain(4).connect(out));
+    I.vox = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 3, spread: 25 }, envelope: { attack: 0.01, decay: 0.15, sustain: 0.6, release: 0.2 } }).connect(voxIn);
+    I.vox.volume.value = -9;
+    const amp = new Tone.Distortion({ distortion: 0.75, oversample: "2x" }), cab = new Tone.Filter({ type: "lowpass", frequency: 3000 });
+    amp.chain(cab, out);
+    I.rhythm = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "sawtooth" }, envelope: { attack: 0.002, decay: 0.12, sustain: 0.35, release: 0.05 } }).connect(amp);
+    I.rhythm.maxPolyphony = 6; I.rhythm.volume.value = -22;
+    const leadAmp = new Tone.Distortion({ distortion: 0.8, oversample: "2x" });
+    leadAmp.chain(new Tone.Filter({ type: "lowpass", frequency: 3800 }), new Tone.FeedbackDelay({ delayTime: "8n", feedback: 0.25, wet: 0.2 }), out);
+    I.lead = new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.005, decay: 0.2, sustain: 0.7, release: 0.15 }, portamento: 0.03 }).connect(new Tone.Vibrato(5.5, 0.04).connect(leadAmp));
+    I.lead.volume.value = -20;
+    return I;
+  },
+  play(I, x) {
+    const { inBar, bar, step, c, d, time, has, tight, pilot, full, solo, soloStart } = x;
+    const root = c.bass[1], m = mid(root);
+    if (has("drums")) {
+      if (tight ? (inBar === 0 || inBar === 8 || (pilot && inBar === 10)) : inBar === 0) I.kick.triggerAttackRelease("C1", "8n", time, 1);
+      if (tight ? (inBar === 4 || inBar === 12) : inBar === 8) I.snare.triggerAttackRelease(0.14, time, 0.9);
+      if (tight && inBar % 2 === 0) I.ride.triggerAttackRelease(300, "16n", time, inBar % 4 === 0 ? 0.6 : 0.35);
+    }
+    if (has("bass")) {   // boogie: root, root, fifth, fifth, sixth, sixth, fifth, fifth
+      const walk = [0, 0, 7, 7, 9, 9, 7, 7];
+      if (tight && inBar % 2 === 0) I.bass.triggerAttackRelease(nn(m - 12 + walk[inBar / 2]), d * 1.7, time, inBar % 4 === 0 ? 1 : 0.75);
+      else if (!tight && inBar % 8 === 0) I.bass.triggerAttackRelease(nn(m - 12), d * 7, time, 0.85);
+    }
+    if (has("piano")) {
+      const ch = c.pad.map(up12);
+      if (tight && (inBar === 2 || inBar === 6 || inBar === 10 || inBar === 14 || (pilot && inBar === 15))) I.piano.triggerAttackRelease(ch, d * 0.9, time, 0.7);
+      else if (!tight && inBar === 0) I.piano.triggerAttackRelease(ch, d * 3, time, 0.6);
+    }
+    if (has("organ") && inBar === 0 && (tight || bar % 2 === 0)) I.organ.triggerAttackRelease(c.pad, d * (tight ? 15.5 : 31), time, 0.5);
+    if (has("vox") && !solo) {
+      if (step % 32 === 28) I.vox.triggerAttackRelease(c.choir[1], d * 1.2, time, 0.9);   // "hey!"
+      if ((tight || full) && inBar === 0 && bar >= 4) I.vox.triggerAttackRelease(c.choir[0], d * 7, time, 0.5);   // "aah"
+    }
+    if (has("rhythm")) {   // shuffle: fifth then sixth over the root
+      if (tight && inBar % 2 === 0) { const top = inBar % 4 === 0 ? 7 : 9; I.rhythm.triggerAttackRelease([nn(m), nn(m + top)], d * 1.4, time, 0.8); }
+      else if (!tight && inBar === 0) I.rhythm.triggerAttackRelease([nn(m), nn(m + 7), nn(m + 12)], d * 6, time, 0.7);
+    }
+    if (has("lead") && !solo) {
+      const v = KN_LEAD.get(step), answer = bar % 4 === 3;
+      if (v && (answer || tight)) I.lead.triggerAttackRelease(v[1], v[2] * d * 0.95, time, 0.85);
+    }
+    if (soloStart && !(has("drums") && tight)) I.snare.triggerAttackRelease(0.2, time, 1);
+  },
+});
+
+// ---------------- Ranger: woodwinds and natural percussion ----------------
+const RG_FLUTE = melody([
+  [0,"E5",4],[4,"A5",4],[8,"G5",2],[10,"E5",2],[12,"D5",4],
+  [16,"E5",6],[22,"D5",2],[24,"C5",4],[28,"A4",4],
+  [32,"C5",4],[36,"F5",4],[40,"E5",2],[42,"D5",2],[44,"C5",4],
+  [48,"A4",8],[56,"C5",4],[60,"D5",4],
+  [64,"E5",4],[68,"G5",4],[72,"E5",2],[74,"D5",2],[76,"C5",4],
+  [80,"G5",6],[86,"E5",2],[88,"D5",8],
+  [96,"B4",4],[100,"D5",4],[104,"G5",4],[108,"D5",4],
+  [112,"B4",8],[120,"A4",8],
+]);
+const RG_KAL = [0, 2, 1, 3, 2, 0, 3, 1];
+defineSet({
+  id: "rg", name: "Ranger", color: "#7ed957", key: "G",
+  loose: "Loose: someone humming by a campfire", tight: "Locked in: the whole forest joins in",
+  pieces: [
+    { id: "rg-boots",   body: "legs",  covers: ["perc"],   item: "Trail Boots",     member: "Hand drummer",  adds: "frame drum and shaker" },
+    { id: "rg-belt",    body: "waist", covers: ["bass"],   item: "Root Belt",       member: "Wood bass",     adds: "plucked woody bass" },
+    { id: "rg-bracers", body: "arms",  covers: ["kalimba"],item: "Bark Bracers",    member: "Kalimba",       adds: "thumb-piano ostinato" },
+    { id: "rg-cloak",   body: "back",  covers: ["drone"],  item: "Moss Cloak",      member: "Reed drone",    adds: "low earthy drone" },
+    { id: "rg-hood",    body: "head",  covers: ["bird"],   item: "Songbird Hood",   member: "Songbirds",     adds: "birdsong chirps" },
+    { id: "rg-longbow", hands: 2, covers: ["flute", "reed"], item: "Hunter's Longbow", member: "Wooden flute + clarinet", adds: "folk melody and reed counter-line", note: "Two-handed · counts as 2" },
+    { id: "rg-crossbow",hands: 1, covers: ["flute"], item: "Hand Crossbow", member: "Wooden flute", adds: "folk melody", note: "One-handed" },
+    { id: "rg-knife",   hands: 1, covers: ["reed"],  item: "Ranger Knife",  member: "Clarinet",     adds: "reed counter-line", note: "One-handed" },
+  ],
+  special: {
+    name: "Call of the Wild", duel: "Hunters' duet", two: "rg-longbow", pair: ["rg-crossbow", "rg-knife"], duelOffset: -12,
+    voice:  { osc: "triangle", lp: 5200, delay: "8n.", wet: 0.25, vibF: 5, vibD: 0.06, port: 0.01, vol: -8, env: { attack: 0.03, decay: 0.1, sustain: 0.8, release: 0.1 } },
+    voiceB: { osc: "square", lp: 1500, delay: "8n.", wet: 0.2, vibF: 4.5, vibD: 0.03, port: 0.01, vol: -12, env: { attack: 0.03, decay: 0.1, sustain: 0.8, release: 0.1 } },
+    // trills, birdcall leaps, a falling scale, fluttering 32nds, a rising call
+    line(sb, c) {
+      const root = mid(c.arp[0]), tri = triOf(c), out = [];
+      if (sb === 0) { for (let i = 0; i < 16; i++) out.push(i % 2 ? sc(idxOf(root + 12) + 1) : root + 12); return { notes: out, sub: 1 }; }
+      if (sb === 1) { for (let i = 0; i < 16; i++) out.push([tri[0] + 12, tri[2] + 24, tri[1] + 12, tri[0] + 24][i % 4]); return { notes: out, sub: 1 }; }
+      if (sb === 2) { const top = idxOf(root + 24); for (let i = 0; i < 16; i++) out.push(sc(top - i)); return { notes: out, sub: 1 }; }
+      if (sb === 3) { for (let i = 0; i < 32; i++) out.push(i % 2 ? tri[2] + 12 : tri[0] + 24); return { notes: out, sub: 2 }; }
+      for (let i = 0; i < 32; i++) out.push(sc(idxOf(root + 12) + Math.floor(i * 7 / 31)));
+      return { notes: out, sub: 2 };
+    },
+  },
+  build(out) {
+    const I = {};
+    I.drum = new Tone.MembraneSynth({ pitchDecay: 0.08, octaves: 2.5, envelope: { attack: 0.002, decay: 0.4, sustain: 0 } }).connect(out);
+    I.drum.volume.value = -2;
+    I.shaker = new Tone.NoiseSynth({ noise: { type: "pink" }, envelope: { attack: 0.004, decay: 0.05, sustain: 0 } }).connect(new Tone.Filter({ type: "highpass", frequency: 5000 }).connect(out));
+    I.shaker.volume.value = -16;
+    I.bass = new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.003, decay: 0.35, sustain: 0, release: 0.1 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 900 }).connect(out));
+    I.bass.volume.value = -2;
+    I.kalimba = new Tone.FMSynth({ harmonicity: 5.07, modulationIndex: 1.5, envelope: { attack: 0.001, decay: 0.6, sustain: 0, release: 0.4 }, modulationEnvelope: { attack: 0.001, decay: 0.08, sustain: 0 } }).connect(out);
+    I.kalimba.volume.value = -12;
+    I.drone = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "custom", partials: [1, 0.2, 0.5, 0.1, 0.25] }, envelope: { attack: 1.2, decay: 0.5, sustain: 0.8, release: 2 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 1100 }).connect(out));
+    I.drone.maxPolyphony = 6; I.drone.volume.value = -18;
+    I.bird = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.005, decay: 0.05, sustain: 0.3, release: 0.03 }, portamento: 0.025 }).connect(new Tone.FeedbackDelay({ delayTime: "16n", feedback: 0.2, wet: 0.2 }).connect(out));
+    I.bird.volume.value = -18;
+    const breath = new Tone.NoiseSynth({ noise: { type: "pink" }, envelope: { attack: 0.02, decay: 0.08, sustain: 0 } }).connect(new Tone.Filter({ type: "bandpass", frequency: 2500, Q: 1 }).connect(out));
+    breath.volume.value = -24; I._breath = breath;
+    I.flute = new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.04, decay: 0.1, sustain: 0.8, release: 0.12 }, portamento: 0.01 }).connect(new Tone.Vibrato(5, 0.06).connect(new Tone.Filter({ type: "lowpass", frequency: 4200 }).connect(out)));
+    I.flute.volume.value = -11;
+    I.reed = new Tone.Synth({ oscillator: { type: "square" }, envelope: { attack: 0.05, decay: 0.15, sustain: 0.7, release: 0.15 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 1300, Q: 1.5 }).connect(out));
+    I.reed.volume.value = -14;
+    return I;
+  },
+  play(I, x) {
+    const { inBar, bar, step, c, d, time, has, tight, pilot, full, solo, soloStart } = x;
+    const m = mid(c.bass[1]);
+    if (has("perc")) {
+      const hits = tight ? [0, 6, 8, 11, 14] : [0, 8];
+      if (hits.includes(inBar)) I.drum.triggerAttackRelease(inBar === 0 || inBar === 8 ? "D2" : "A2", "8n", time, inBar % 8 === 0 ? 1 : 0.6);
+      if (tight) I.shaker.triggerAttackRelease(0.04, time, inBar % 2 === 0 ? 0.7 : pilot ? 0.45 : 0.25);
+    }
+    if (has("bass")) {
+      if (tight && [0, 3, 8, 11].includes(inBar)) I.bass.triggerAttackRelease(nn(m - 12 + (inBar === 3 || inBar === 11 ? 7 : 0)), d * 2.5, time, 0.9);
+      else if (!tight && inBar === 0) I.bass.triggerAttackRelease(nn(m - 12), d * 6, time, 0.85);
+    }
+    if (has("kalimba")) {
+      const tones = [...c.arp];
+      if (tight && inBar % 2 === 0) I.kalimba.triggerAttackRelease(tones[RG_KAL[inBar / 2]], d * 2, time, inBar % 4 === 0 ? 0.85 : 0.6);
+      else if (!tight && inBar % 4 === 0) I.kalimba.triggerAttackRelease(tones[RG_KAL[inBar / 4]], d * 3, time, 0.6);
+    }
+    if (has("drone") && inBar === 0 && bar % 2 === 0) I.drone.triggerAttackRelease([nn(m - 12), nn(m - 5)], d * 31, time, 0.6);
+    if (has("bird") && !solo) {
+      const chirp = tight ? (step * 7) % 13 === 0 : (bar % 2 === 1 && inBar === 6);
+      if (chirp) { const hi = mid(c.arp[3]) + 12; I.bird.triggerAttackRelease(nn(hi), 0.035, time, 0.7); I.bird.triggerAttackRelease(nn(hi + 3), 0.05, time + 0.06, 0.6); }
+    }
+    if (has("flute") && !solo) {
+      const v = RG_FLUTE.get(step);
+      if (v && (tight || step % 16 === 0)) { I.flute.triggerAttackRelease(v[1], v[2] * d * 0.92, time, 0.8); I._breath.triggerAttackRelease(0.05, time, 0.6); }
+    }
+    if (has("reed")) {
+      if (tight && (inBar === 0 || inBar === 8)) I.reed.triggerAttackRelease(c.pad[inBar === 0 ? 0 : 1], d * 7.5, time, 0.7);
+      else if (!tight && inBar === 0) I.reed.triggerAttackRelease(c.pad[0], d * 15, time, 0.6);
+    }
+    if (soloStart && !(has("perc") && tight)) I.drum.triggerAttackRelease("D2", "8n", time, 1);
+  },
+});
+
+// ---------------- Mage: wonky and mystical ----------------
+const MG_VOX = melody([
+  [0,"A5",8],[8,"E5",8],[16,"F5",12],[28,"E5",4],[32,"G5",8],[40,"C6",8],[48,"B5",16],
+  [64,"A5",8],[72,"C6",8],[80,"E6",16],[96,"D6",8],[104,"B5",8],[112,"G5",8],[120,"E5",8],
+]);
+defineSet({
+  id: "mg", name: "Mage", color: "#c77dff", key: "M",
+  loose: "Loose: a music box in an empty tower", tight: "Locked in: the spell takes hold",
+  pieces: [
+    { id: "mg-slippers", body: "legs",  covers: ["beat"],    item: "Rune Slippers", member: "Lo-fi rhythm",  adds: "wonky crushed beat" },
+    { id: "mg-sash",     body: "waist", covers: ["bass"],    item: "Astral Sash",   member: "Sliding bass",  adds: "bass that bends between notes" },
+    { id: "mg-bracers",  body: "arms",  covers: ["celesta"], item: "Glyph Bracers", member: "Celesta",       adds: "music-box figures in threes" },
+    { id: "mg-cloak",    body: "back",  covers: ["glass"],   item: "Starcloak",     member: "Glass harmonica", adds: "wavering glass pads" },
+    { id: "mg-hat",      body: "head",  covers: ["vox"],     item: "Seer's Hat",    member: "Theremin",      adds: "eerie gliding theremin" },
+    { id: "mg-staff",    hands: 2, covers: ["bell", "harp"], item: "Starfall Staff", member: "Bells + harp", adds: "tubular bells and harp runs", note: "Two-handed · counts as 2" },
+    { id: "mg-wand",     hands: 1, covers: ["bell"], item: "Moon Wand", member: "Tubular bells", adds: "tolling bells", note: "One-handed" },
+    { id: "mg-tome",     hands: 1, covers: ["harp"], item: "Grimoire",  member: "Harp",          adds: "rippling harp runs", note: "One-handed" },
+  ],
+  special: {
+    name: "Arcane Surge", duel: "Spell duel", two: "mg-staff", pair: ["mg-wand", "mg-tome"], duelOffset: 0,
+    voice:  { osc: "sine", lp: 6000, delay: "8n.", wet: 0.35, vibF: 6, vibD: 0.12, port: 0.08, vol: -7 },
+    voiceB: { osc: "triangle", lp: 5000, delay: "4n", wet: 0.3, vibF: 3, vibD: 0.05, port: 0.04, vol: -10 },
+    // whole-tone drifts, wide leaps, a chromatic slide, shimmering 32nds, a spiral up
+    line(sb, c) {
+      const root = mid(c.arp[0]), tri = triOf(c), out = [];
+      if (sb === 0) { for (let i = 0; i < 16; i++) out.push(root + 12 + [0, 2, 4, 6, 8, 6, 4, 2][i % 8]); return { notes: out, sub: 1 }; }
+      if (sb === 1) { for (let i = 0; i < 16; i++) out.push(i % 2 ? tri[2] + 24 : tri[0]); return { notes: out, sub: 1 }; }
+      if (sb === 2) { for (let i = 0; i < 16; i++) out.push(root + 24 - i); return { notes: out, sub: 1 }; }
+      if (sb === 3) { for (let i = 0; i < 32; i++) out.push([tri[0] + 24, tri[2] + 12, tri[1] + 24, tri[0] + 13][i % 4]); return { notes: out, sub: 2 }; }
+      for (let i = 0; i < 32; i++) out.push(root + 12 + Math.floor(i * 14 / 31) + (i % 2 ? 7 : 0));
+      return { notes: out, sub: 2 };
+    },
+  },
+  build(out) {
+    const I = {};
+    const crush = new Tone.Distortion({ distortion: 0.5, oversample: "none" }); crush.chain(new Tone.Filter({ type: "lowpass", frequency: 2800 }), out);   // lo-fi grit without an audio worklet
+    I.kick = new Tone.MembraneSynth({ pitchDecay: 0.06, octaves: 5, envelope: { attack: 0.001, decay: 0.3, sustain: 0 } }).connect(crush);
+    I.kick.volume.value = -4;
+    I.click = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.02, sustain: 0 } }).connect(new Tone.Filter({ type: "bandpass", frequency: 3500, Q: 3 }).connect(crush));
+    I.click.volume.value = -10;
+    I.bass = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.7, release: 0.2 }, portamento: 0.12 }).connect(out);
+    I.bass.volume.value = -3;
+    I.celesta = new Tone.FMSynth({ harmonicity: 7, modulationIndex: 2, envelope: { attack: 0.001, decay: 0.7, sustain: 0, release: 0.5 }, modulationEnvelope: { attack: 0.001, decay: 0.2, sustain: 0 } }).connect(new Tone.FeedbackDelay({ delayTime: "8n.", feedback: 0.3, wet: 0.25 }).connect(out));
+    I.celesta.volume.value = -15;
+    const trem = new Tone.Tremolo(4, 0.6).start(), cho = new Tone.Chorus(0.8, 4, 0.7).start();
+    trem.chain(cho, out);
+    I.glass = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "sine" }, envelope: { attack: 0.5, decay: 0.3, sustain: 0.8, release: 1.6 } }).connect(trem);
+    I.glass.maxPolyphony = 8; I.glass.volume.value = -14;
+    I.vox = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.12, decay: 0.2, sustain: 0.85, release: 0.5 }, portamento: 0.15 }).connect(new Tone.Vibrato(6, 0.14).connect(new Tone.FeedbackDelay({ delayTime: "4n", feedback: 0.3, wet: 0.25 }).connect(out)));
+    I.vox.volume.value = -13;
+    I.bell = new Tone.FMSynth({ harmonicity: 3.5, modulationIndex: 10, envelope: { attack: 0.001, decay: 2.2, sustain: 0, release: 1.5 }, modulationEnvelope: { attack: 0.001, decay: 0.6, sustain: 0.1 } }).connect(out);
+    I.bell.volume.value = -17;
+    I.harp = new Tone.Synth({ oscillator: { type: "custom", partials: [1, 0.5, 0.25, 0.12, 0.06] }, envelope: { attack: 0.002, decay: 0.9, sustain: 0, release: 0.6 } }).connect(new Tone.FeedbackDelay({ delayTime: "16n", feedback: 0.2, wet: 0.15 }).connect(out));
+    I.harp.volume.value = -13;
+    return I;
+  },
+  play(I, x) {
+    const { inBar, bar, step, c, d, time, has, tight, pilot, full, solo, soloStart } = x;
+    const m = mid(c.bass[1]);
+    if (has("beat")) {
+      if (tight ? [0, 7, 10].includes(inBar) : inBar === 0) I.kick.triggerAttackRelease("E1", "8n", time, inBar === 0 ? 1 : 0.7);
+      if (tight ? (inBar === 4 || inBar === 12 || (pilot && inBar === 15)) : inBar === 8) I.click.triggerAttackRelease(0.02, time, inBar === 15 ? 0.5 : 0.9);
+    }
+    if (has("bass")) {   // bends between notes thanks to the portamento
+      if (tight && [0, 6, 10].includes(inBar)) I.bass.triggerAttackRelease(nn(m - 12 + (inBar === 6 ? 7 : inBar === 10 ? 12 : 0)), d * 3.5, time, 0.85);
+      else if (!tight && inBar === 0) I.bass.triggerAttackRelease(nn(m - 12), d * 12, time, 0.8);
+    }
+    if (has("celesta")) {   // groups of 3 + 3 + 2 against the 4/4 beat
+      const hits = tight ? [0, 3, 6, 8, 11, 14] : [0, 8], k = hits.indexOf(inBar);
+      if (k >= 0) I.celesta.triggerAttackRelease(up12(c.arp[k % 4]), d * 2, time, 0.7);
+    }
+    if (has("glass") && inBar === 0 && (tight || bar % 2 === 0)) I.glass.triggerAttackRelease(c.pad.map(up12), d * (tight ? 15 : 30), time, 0.5);
+    if (has("vox") && !solo) {
+      const v = MG_VOX.get(step);
+      if (v && (tight || full || step % 32 === 0)) I.vox.triggerAttackRelease(v[1], v[2] * d * 0.95, time, 0.75);
+    }
+    if (has("bell") && !solo) {
+      if (tight ? [0, 6, 12].includes(inBar) : (inBar === 0 && bar % 2 === 0)) I.bell.triggerAttackRelease(c.arp[[0, 6, 12].indexOf(inBar) % 3 + 0] || c.arp[0], d * 6, time, 0.7);
+    }
+    if (has("harp")) {
+      if (tight && inBar >= 8) I.harp.triggerAttackRelease(up12(c.arp[(inBar - 8) % 4]).replace(/\d/, o => String(+o + (inBar >= 12 ? 0 : -1))), d * 2, time);
+      else if (!tight && inBar % 4 === 0 && inBar >= 8) I.harp.triggerAttackRelease(c.arp[(inBar / 4) % 4], d * 3, time);
+    }
+    if (soloStart && !(has("beat") && tight)) I.kick.triggerAttackRelease("E1", "8n", time, 1);
+  },
+});
+
+
+// =====================================================================
 // Sequencer (Sound Lab v6 clock) with gameplay hooks.
 // Every weapon fires on its own layer's notes, and each layer's part gets
 // busier as it levels up: Lv 1 is a simple tune, Lv 3 is the full part.
@@ -1138,11 +1430,38 @@ const GEAR_FX = {
   "or-greatbow": "Long piercing arrows on violin notes, a heavy knockback arrow on cello notes.",
   "or-rapier": "Long, narrow thrust on every violin note.",
   "or-saber": "Wide sweeping slash on every cello note.",
+  "kn-greaves": "Stomp shockwave on the kick, a pulse on the snare.",
+  "kn-belt": "+25 max hull and 15% less damage taken.",
+  "kn-gauntlets": "Five-shot spread on every piano stab.",
+  "kn-tabard": "Dropout lasts 1 bar instead of 2.",
+  "kn-helm": "Shout cone on every “hey!”.",
+  "kn-greatsword": "Huge crescent slash on the shuffle riff, a long thrust on every lick note.",
+  "kn-sword": "Crescent slash on the shuffle riff.",
+  "kn-shield": "Shield bash in front of the Rig on every lick note, knocking enemies back.",
+  "rg-boots": "Stomp shockwave on the frame drum.",
+  "rg-belt": "+25 max hull and 15% less damage taken.",
+  "rg-bracers": "Homing thorn darts on the kalimba.",
+  "rg-cloak": "Dropout lasts 1 bar instead of 2.",
+  "rg-hood": "Each birdsong chirp sends a dart at a random enemy.",
+  "rg-longbow": "Long piercing arrows on flute notes, a three-arrow volley on clarinet notes.",
+  "rg-crossbow": "A fast bolt on every flute note.",
+  "rg-knife": "Quick knife thrust on every clarinet note.",
+  "mg-slippers": "Stomp on the kick, a pulse on every click.",
+  "mg-sash": "+25 max hull and 15% less damage taken.",
+  "mg-bracers": "Homing magic missiles on the celesta.",
+  "mg-cloak": "Dropout lasts 1 bar instead of 2.",
+  "mg-hat": "A beam at the nearest enemy on every theremin note.",
+  "mg-staff": "A slow homing star on every bell, little homing sparks on harp notes.",
+  "mg-wand": "A homing bolt on every bell.",
+  "mg-tome": "A small arcane nova around the Rig on harp notes.",
 };
 // Which instrument fires which attack, and the shortest gap between two of them (ms)
 const HOOK = {
   pm: { kick: ["stomp", 400], snare: ["pulse", 400], gtr: ["wpn:rhythm", 220], lead: ["wpn:lead", 120], keys: ["spread", 300], vox: ["scream", 250] },
   sw: { kick: ["stomp", 400], snare: ["blast", 400], arp: ["zap", 180], lead: ["wpn:lead", 220], brass: ["wpn:brass", 300], vox: ["scream", 250] },
+  kn: { kick: ["stomp", 400], snare: ["pulse", 400], piano: ["spread", 300], vox: ["scream", 250], rhythm: ["wpn:rhythm", 220], lead: ["wpn:lead", 140] },
+  rg: { drum: ["stomp", 400], kalimba: ["zap", 180], bird: ["bolt", 250], flute: ["wpn:flute", 160], reed: ["wpn:reed", 300] },
+  mg: { kick: ["stomp", 400], click: ["pulse", 400], celesta: ["zap", 180], vox: ["beam", 300], bell: ["wpn:bell", 200], harp: ["wpn:harp", 200] },
   or: { bd: ["stomp", 400], cym: ["blast", 900], timp: ["slam", 300], str: ["zap", 180], horns: ["horn", 400], sop: ["heal", 600], vln: ["wpn:violin", 180], cello: ["wpn:cello", 350] },
 };
 const SHOP = [
@@ -1171,8 +1490,9 @@ const ownedN = id => save.dev ? (SHOP.find(s => s.id === id).max || 1) : (save.o
 const effLevel = () => save.dev ? 6 : save.level;
 const layerCap = () => { const l = effLevel(); return l >= 6 ? 6 : l >= 4 ? 5 : l >= 2 ? 4 : 3; };
 const banSlots = () => { const l = effLevel(); return l >= 5 ? 2 : l >= 3 ? 1 : 0; };
-const powerPool = () => [...BASE_POOL, ...["funk", "choir", "strings"].filter(owned)].filter(id => !save.bans.includes(id));
-const setsUnlocked = () => Object.keys(SETS).filter(id => owned("set-" + id));
+const powerPool = () => [...(run && run.pilot && !save.bans.includes(PILOTS[run.pilot].start) && !BASE_POOL.includes(PILOTS[run.pilot].start) && !owned(PILOTS[run.pilot].start) ? [PILOTS[run.pilot].start] : []), ...powerPool0()];
+const powerPool0 = () => [...BASE_POOL, ...["funk", "choir", "strings"].filter(owned)].filter(id => !save.bans.includes(id));
+const setsUnlocked = () => Object.keys(SETS).filter(id => STARTER[id] ? !!(run && run.pilot === STARTER[id]) : owned("set-" + id));
 
 // =====================================================================
 // Arena state
@@ -1426,6 +1746,15 @@ const WPN_ATK = {
   "or-greatbow": (m, pw, c) => m === "violin" ? bolt(c, 950, 10 * pw, 3) : (() => { const t = nearest(P.x, P.y); const a = t ? Math.atan2(t.y - P.y, t.x - P.x) : aimAngle(); shot({ x: P.x, y: P.y, vx: Math.cos(a) * 520, vy: Math.sin(a) * 520, dmg: 24 * pw, color: c, r: 9, pierce: 4, life: 1.4, knock: 40 }); })(),
   "or-rapier":   (m, pw, c) => stab(aimAngle(), 125, 12 * pw, c),
   "or-saber":    (m, pw, c) => slash(aimAngle(), 125, 1.3, 15 * pw, c),
+  "kn-greatsword": (m, pw, c) => m === "rhythm" ? slash(aimAngle(), 150, 1.3, 18 * pw, c) : stab(aimAngle(), 140, 9 * pw, c),
+  "kn-sword":    (m, pw, c) => slash(aimAngle(), 115, 1.0, 13 * pw, c),
+  "kn-shield":   (m, pw, c) => { const a = aimAngle(), x = P.x + Math.cos(a) * 40, y = P.y + Math.sin(a) * 40; fx.push({ k: "slam", x, y, r: 55 * aoeMul(), t: 0, life: 0.25, color: c }); ring(x, y, 55, 7 * pw, c, 36); },
+  "rg-longbow":  (m, pw, c) => m === "flute" ? bolt(c, 980, 11 * pw, 2) : spread(3, 0.16, 7 * pw, c),
+  "rg-crossbow": (m, pw, c) => bolt(c, 860, 9 * pw, 1),
+  "rg-knife":    (m, pw, c) => stab(aimAngle(), 95, 11 * pw, c),
+  "mg-staff":    (m, pw, c) => { const t = nearest(P.x, P.y, 650); if (!t) return; if (m === "bell") shootAt(t, 380, { dmg: 16 * pw, color: c, r: 9, homing: 6, life: 1.8 }); else shootAt(t, 520, { dmg: 4 * pw, color: c, r: 3, homing: 10, life: 1 }); },
+  "mg-wand":     (m, pw, c) => { const t = nearest(P.x, P.y, 600); if (t) shootAt(t, 480, { dmg: 11 * pw, color: c, r: 6, homing: 7, life: 1.4 }); },
+  "mg-tome":     (m, pw, c) => ring(P.x, P.y, 85, 5 * pw, c, 10),
 };
 function bolt(c, speed, dmg, pierce) { const t = nearest(P.x, P.y); const a = t ? Math.atan2(t.y - P.y, t.x - P.x) : aimAngle(); shot({ x: P.x, y: P.y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, dmg, color: c, r: 4, pierce, life: 1, streak: true }); }
 function heal(n, color) { const before = P.hp; P.hp = Math.min(P.maxHp, P.hp + n); if (P.hp > before) texts.push({ x: P.x, y: P.y - 30, s: "+" + Math.round(P.hp - before), t: 0, color: color || "#5ee0a0" }); }
@@ -1704,6 +2033,29 @@ function newRun() {
   if (baseBpm !== 128) { baseBpm = 128; if (nodes && !specialPhase) Tone.Transport.bpm.rampTo(baseBpm, 0.5); }
   resetMix();
   document.getElementById("hudTop").hidden = false; document.getElementById("hudBot").hidden = false;
+  showPilots();
+}
+// Pilots: each starts with its own weapon and a perk, and only that pilot can find its starter set
+const PILOTS = {
+  knight: { name: "Knight", color: "#ffb347", set: "kn", start: "flute", perk: "Starts with the Sword. +25 max hull.", music: "rock and roll: drums, boogie bass, piano, organ, guitars" },
+  ranger: { name: "Ranger", color: "#7ed957", set: "rg", start: "strings", perk: "Starts with the Comet Bow. Moves 12% faster and dashes recharge 20% sooner.", music: "nature: hand drums, kalimba, birdsong, wooden flute, clarinet" },
+  mage:   { name: "Mage", color: "#c77dff", set: "mg", start: "arp", perk: "Starts with the Lightning Rune and a random Lens.", music: "mystical: crushed beat, celesta, glass harmonica, theremin, bells, harp" },
+};
+function showPilots() {
+  run.mode = "choice";
+  const ids = Object.keys(PILOTS);
+  showScreen(`<div class="panel"><div><h2>Choose your pilot</h2><p>Each pilot starts with its own weapon and can find its own 7-piece starter set during the run.</p></div>
+    <div class="cards">${ids.map((id, i) => { const p = PILOTS[id]; return `<button class="card" type="button" data-p="${id}" style="--c:${p.color}"><span class="tag">PILOT</span><b>${p.name}</b><span class="music">Starter set: ${SETS[p.set].name}, ${p.music}</span><span class="fx">${p.perk}</span><span class="slot">Starting layer: ${byId(p.start).power}</span><kbd>${i + 1}</kbd></button>`; }).join("")}</div></div>`);
+  document.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", () => choosePilot(b.dataset.p)));
+  armIdle(() => choosePilot(save.pilot && PILOTS[save.pilot] ? save.pilot : "knight"));
+}
+function choosePilot(id) {
+  if (!run || run.pilot) return;
+  const p = PILOTS[id]; run.pilot = id; save.pilot = id; persist();
+  applyCard({ type: "new", id: p.start });
+  if (id === "knight") { P.maxHp += 25; P.hp += 25; }
+  if (id === "ranger") { run.speedMul = 1.12; run.dashMul = 0.8; }
+  if (id === "mage") { const els = Object.keys(EL); run.lens.push({ el: els[Math.floor(Math.random() * els.length)], lv: 1 }); lensSound(); ambUpdate(); }
   showChoices("start");
 }
 function startRoom(type) {
@@ -1790,7 +2142,7 @@ function makeChoices(kind) {
       for (const pc of SETS[sid].pieces) {
         if (equipped.has(pc.id)) continue;
         if (pc.hands && pc.covers.every(m => have.has(m))) continue;
-        c.push({ type: "gear", id: pc.id, w: (kind === "elite" ? 4 : kind === "green" ? 0.6 : 1) * (have.size ? 2 : 1) / Math.max(1, setsUnlocked().length * 0.6) });
+        c.push({ type: "gear", id: pc.id, w: (kind === "elite" ? 4 : kind === "green" ? 0.6 : 1) * (have.size ? 2 : 1) * (STARTER[sid] ? 1.3 : 1) / Math.max(1, setsUnlocked().length * 0.6) });
       }
     }
     if ((run.sub || 0) < 3) c.push({ type: "hp", w: kind === "green" ? 2 : 0.9 });
@@ -1982,13 +2334,14 @@ function showHub() {
         ${bans ? all.filter(id => BASE_POOL.includes(id) || owned(id)).map(id => { const b = save.bans.includes(id); return `<div class="item ${b ? "ban" : ""}"><div><b>${byId(id).power}</b><span>${byId(id).layer}</span></div><button class="btn small" type="button" data-ban="${id}" ${!b && save.bans.length >= bans ? "disabled" : ""}>${b ? "Unban" : "Ban"}</button></div>`; }).join("") : `<p style="font-size:.8rem">Unlocks at account level 3.</p>`}
       </div>
       <div class="list"><h3>How to play</h3><div class="keys">
+        <span>Each run, pick a <b>pilot</b>: Knight, Ranger or Mage. Each starts with its own weapon and can find its own starter set.</span>
         <span>Leave the controls alone and the Rig fights on <b>autopilot</b> at 60% power.</span>
         <span>Touch <kbd>WASD</kbd> or arrows (or drag on a touch screen) to <b>take control</b>: rock drums drop in on the next bar and the Rig hits at 100%.</span>
         <span>Mouse aims while piloting. <kbd>Space</kbd> or right-click dashes through bullets.</span>
         <span>Only the small glowing core of the Rig can be hit.</span>
         <span>Getting hit triggers <b>Dropout</b>: your newest layer and its weapon cut out for 2 bars.</span>
         <span>A full 7-piece set: <kbd>X</kbd> for its special. 10 s invincible, 30 s cooldown (45 s in boss rooms).</span>
-        <span><kbd>Esc</kbd> pauses. Rewards: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>.</span>
+        <span><kbd>Esc</kbd> pauses. Rewards: <kbd>1</kbd> to <kbd>4</kbd> (the 4th card skips).</span>
         <span>Progress is saved in this browser only.</span></div></div>
     </div></div>`);
   document.getElementById("startBtn").addEventListener("click", async () => { await startAudio(); newRun(); });
@@ -2092,14 +2445,14 @@ function inputVec() {
   if (joy && joy.active) { x += joy.dx; y += joy.dy; }
   const L = Math.hypot(x, y); return L > 0.15 ? { x: x / Math.max(1, L), y: y / Math.max(1, L), any: true } : { x: 0, y: 0, any: false };
 }
-function autoDash(a) { P.dashT = 0.16; P.dashCd = 0.85; P.dvx = Math.cos(a) * 780; P.dvy = Math.sin(a) * 780; fx.push({ k: "ring", x: P.x, y: P.y, r: 26, t: 0, life: 0.25, color: "#ff5c8a" }); }
+function autoDash(a) { P.dashT = 0.16; P.dashCd = 0.85 * (run.dashMul || 1); P.dvx = Math.cos(a) * 780; P.dvy = Math.sin(a) * 780; fx.push({ k: "ring", x: P.x, y: P.y, r: 26, t: 0, life: 0.25, color: "#ff5c8a" }); }
 function dash() {
   if (!run || run.mode !== "fight") return;
   markInput();
   if (P.dashCd > 0) { dashBuffer = 0.15; return; }   // pressed a moment early: dash as soon as it's ready
   const v = inputVec();
   const a = v.any ? Math.atan2(v.y, v.x) : (mouse.inside && piloting() ? Math.atan2(mouse.y - P.y, mouse.x - P.x) : P.face);
-  P.dashT = 0.16; P.dashCd = 0.85; P.dvx = Math.cos(a) * 780; P.dvy = Math.sin(a) * 780;
+  P.dashT = 0.16; P.dashCd = 0.85 * (run.dashMul || 1); P.dvx = Math.cos(a) * 780; P.dvy = Math.sin(a) * 780;
   fx.push({ k: "ring", x: P.x, y: P.y, r: 26, t: 0, life: 0.25, color: "#ff5c8a" });
 }
 
@@ -2115,7 +2468,7 @@ function update(dt) {
   if (P.dashT > 0) { P.dashT -= dt; P.x += P.dvx * dt; P.y += P.dvy * dt; }
   else {
     const mv = wantPilot ? v : autopilot();
-    const spd = wantPilot ? 285 : 215;
+    const spd = (wantPilot ? 285 : 215) * (run.speedMul || 1);
     P.x += mv.x * spd * dt; P.y += mv.y * spd * dt;
   }
   P.x = clamp(P.x, P.r, AW - P.r); P.y = clamp(P.y, P.r, AH - P.r);
@@ -2392,7 +2745,7 @@ function hud() {
   const now = performance.now();
   setText("shieldTxt", run.lv.has("pads") ? (now < P.gongUntil ? "Gong: invulnerable" : `Gong every ${LV("pads") === 1 ? "2 bars" : "bar"}`) : "No gong");
   setText("layerTxt", `Layers ${run.lv.size} / ${layerCap()}`);
-  setText("roomTxt", run.room ? `Room ${run.room} · Act ${run.act === 1 ? "I" : "II"}` : "Opening pick");
+  setText("roomTxt", (run.pilot ? PILOTS[run.pilot].name + " · " : "") + (run.room ? `Room ${run.room} · Act ${run.act === 1 ? "I" : "II"}` : "Opening pick"));
   const lab = { fight: "F", elite: "E", green: "G", mini: "M", boss: "B" };
   let m = ""; for (let i = 1; i <= 12; i++) { const t = run.path[i - 1] || (i === 6 ? "mini" : i === 12 ? "boss" : ""); m += `<i class="${i < run.room ? "done" : i === run.room ? "now" : ""} ${i === 6 || i === 12 ? "boss" : ""}" title="Room ${i}">${lab[t] || ""}</i>`; }
   setHTML("map", m);
