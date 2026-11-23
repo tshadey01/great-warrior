@@ -1965,12 +1965,12 @@ function musicAttack(type, a, pw, C) {
     case "flute": if (active("flute")) slash(aimAngle(), 115, 1.05, 16 * lvm("flute") * (LV("flute") === 1 ? 1.5 : 1) * pw, C("flute")); break;
     // Plasma Blade: short-range, medium-damage line that travels a short distance and cuts through everything
     // Plasma Blade: short-range beam aimed straight at the nearest enemy, hits everything along it
-    case "drop": if (active("drop")) { const big = a.big, len = big ? 170 + 15 * LV("drop") : 120; const t = nearest(P.x, P.y, len + 60); const a0 = t ? Math.atan2(t.y - P.y, t.x - P.x) : aimAngle(); plasmaBeam(a0, len, big ? 18 : 12, (big ? 18 : 9) * lvm("drop") * pw, C("drop"), big ? 0.28 : 0.16); if (big) shake(2); } break;
+    case "drop": if (active("drop")) { const big = a.big, len = big ? 170 + 15 * LV("drop") : 120; const t = nearest(P.x, P.y, len + 60); const a0 = t ? Math.atan2(t.y - P.y, t.x - P.x) : aimAngle(); plasmaBeam(a0, len, big ? 18 : 12, (big ? 24 : 12) * lvm("drop") * (LV("drop") === 1 ? 1.8 : 1) * pw, C("drop"), big ? 0.28 : 0.16); if (big) shake(2); } break;
     // War Hammer: slow, heavy area slam in front of the Rig
     case "taiko": if (active("taiko")) { const a0 = aimAngle(), x = P.x + Math.cos(a0) * 70, y = P.y + Math.sin(a0) * 70, r = 80 + 8 * LV("taiko"); fx.push({ k: "slam", x, y, r: r * aoeMul(), t: 0, life: 0.45, color: C("taiko") }); ring(x, y, r, 30 * a.v * lvm("taiko") * pw, C("taiko"), 40); shake(a.v > 0.85 ? 5 : 2); } break;
     case "arp": if (active("arp")) {
       let from = P, t = nearest(P.x, P.y, 320); const hitSet = new Set(); let jumps = 2 + LV("arp");
-      const dmg = 6 * lvm("arp") * (LV("arp") === 1 ? 1.8 : 1) * pw;
+      const dmg = 7 * lvm("arp") * (LV("arp") === 1 ? 1.8 : 1) * pw;
       while (t && jumps-- > 0) { line(from.x, from.y, t.x, t.y, C("arp"), 2, 0.12); hurt(t, dmg, C("arp")); hitSet.add(t); from = t; t = nearest(from.x, from.y, 190, hitSet); }
     } break;
     case "gong": if (active("pads")) {
@@ -2400,7 +2400,10 @@ function handItems() {
   for (const g of equipped) { const pc = PIECE[g]; if (pc.hands) items.push({ kind: "gear", id: g, order: gearOrder[g], hands: pc.hands }); }
   return items.sort((a, b) => a.order - b.order);
 }
-const nameOf = r => r.kind === "layer" ? byId(r.id).power : PIECE[r.id].item;
+const nameOf = r => r.kind === "layer" ? byId(r.id).power + (run && run.lv.get(r.id) > 1 ? " Lv " + run.lv.get(r.id) : "") : PIECE[r.id].item;
+// Single-target damage per second while piloting, per level (attacks per second from the music x damage per hit; balance pass 2026-11-23).
+// Each level roughly doubles a weapon because its part also plays more notes, which the upgrade cards now say.
+const WDPS = { flute: [26, 49, 95], drop: [23, 49, 64], taiko: [40, 78, 123], arp: [29, 45, 59], funk: [24, 45, 133], strings: [32, 57, 113] };
 function plan(card) {
   const rm = [];
   const inRm = i => rm.some(r => r.kind === i.kind && r.id === i.id);
@@ -2468,7 +2471,7 @@ function cardHTML(card, i) {
     tag = card.type === "new" ? "NEW LAYER" : `LEVEL ${lv - 1} → ${lv}`;
     extra = `<span class="lvl">${lvPips(lv - 1, lv, 3)} Lv ${lv} of 3</span>`; title = s.power + (card.type === "up" ? " Lv " + lv : "");
     music = (card.type === "new" ? s.layer + ": " : "Music: ") + PW[card.id].lv[lv - 1].toLowerCase();
-    eff = PW[card.id].fx + (card.type === "up" && card.id !== "pads" ? " +45% damage." : "");
+    eff = PW[card.id].fx + (card.type === "up" && WDPS[card.id] ? ` About ×${(WDPS[card.id][lv - 1] / WDPS[card.id][lv - 2]).toFixed(1)} damage per second: more notes and harder hits.` : card.type === "up" && card.id !== "pads" ? " Stronger and busier." : "");
     slot = "Mounts on: " + SLOT_NAME[SLOT_OF[card.id]];
   } else if (card.type === "gear") {
     const pc = PIECE[card.id], S = SETS[pc.set], have = membersOf(pc.set); color = S.color;
@@ -2483,7 +2486,8 @@ function cardHTML(card, i) {
   else if (card.type === "tip") { color = "#9ad17a"; tag = "SKIP"; title = "Tip jar"; music = "Keep the song as it is"; eff = `+${tipAmt()} Royalties, paid out when the run ends.`; slot = "Changes nothing on the Rig"; }
   else if (card.type === "patch") { color = "#5ee0a0"; tag = "SKIP"; title = "Quick patch"; music = "Keep the song as it is"; eff = `Repair ${patchAmt()} hull.`; slot = "Changes nothing on the Rig"; }
   const rm = plan(card);
-  const warn = rm.length ? `<span class="warn">Replaces ${rm.map(nameOf).join(" and ")} on the next bar</span>` : "";
+  const lostUp = rm.some(r => r.kind === "layer" && run.lv.get(r.id) > 1);
+  const warn = rm.length ? `<span class="warn">Replaces ${rm.map(nameOf).join(" and ")} on the next bar${lostUp ? ". Its upgrades are lost" : ""}</span>` : "";
   const skip = card.type === "tip" || card.type === "patch";
   return `<button class="card${skip ? " skip" : ""}" type="button" data-i="${i}" style="--c:${color}"><span class="tag">${tag}</span><b>${title}</b>${extra}<span class="music">${music}</span><span class="fx">${hl(eff)}</span><span class="slot">${slot}</span>${warn}<kbd>${i + 1}</kbd></button>`;
 }
