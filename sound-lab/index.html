@@ -1,0 +1,1522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Great Warrior Sound Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a gig-stage band on top (the world gets color as layers stack), a transport strip, then a mixing-desk grid of power-up channels. Single dark "stage lights" look by choice. */
+:root {
+  color-scheme: dark;
+  --ground: #100e18;
+  --panel: #1a1726;
+  --panel-2: #221e32;
+  --line: #2f2a44;
+  --ink: #efeaf9;
+  --mute: #9a92b6;
+  --hot: #ff5c8a;
+  --gold: #ffd166;
+  --ok: #5ee0a0;
+  --f-display: "Chakra Petch", "Trebuchet MS", system-ui, sans-serif;
+  --f-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding-block: 20px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid;
+  gap: 18px;
+}
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(1.5rem, 4vw, 2.1rem); margin: 0; letter-spacing: .02em; text-wrap: balance; }
+h1 span { color: var(--gold); }
+.key-facts { font-family: var(--f-mono); font-size: .8rem; color: var(--mute); display: flex; gap: 14px; flex-wrap: wrap; }
+.key-facts b { color: var(--ink); font-weight: 500; }
+
+/* Stage band */
+.stage {
+  position: relative; height: 250px; border-radius: 14px; overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 50% 120%, #ff5c8a 0%, transparent 55%),
+    radial-gradient(60% 70% at 15% 10%, #3dd6ff 0%, transparent 60%),
+    radial-gradient(60% 70% at 85% 0%, #ffd166 0%, transparent 60%),
+    linear-gradient(180deg, #3a2a6b, #171226);
+  filter: saturate(var(--sat, 0.08)) brightness(var(--bri, 0.7));
+  transition: filter 1.2s ease;
+}
+.stage-wrap { position: relative; }
+.stage-hud { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: space-between; padding: 12px 14px; pointer-events: none; font-family: var(--f-mono); font-size: .78rem; }
+.stage-hud .pill { white-space: nowrap; background: rgba(10,8,18,.72); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; color: var(--ink); }
+.pill.pilot { border-color: var(--hot); color: var(--hot); }
+.mech { position: absolute; left: 50%; top: 10px; height: calc(100% - 20px); transform: translateX(-50%); overflow: visible; transition: transform .08s ease-out; }
+.mech.beat { transform: translateX(-50%) translateY(1px) scale(1.025); }
+.mech [data-part], .mech .gi * { fill: #2b2540; stroke: #6a6190; stroke-width: 1.4; transition: fill .3s, stroke .3s, opacity .3s; }
+.mech .trim { fill: none; stroke: #6a6190; stroke-width: 1.4; }
+.mech .gi { opacity: 0; transition: opacity .35s; }
+.mech .gi.on, .mech .gi.armor, .mech .gi.drop { opacity: 1; }
+.mech .on, .mech .on * { fill: var(--c); stroke: #fff; stroke-opacity: .55; filter: drop-shadow(0 0 5px var(--c)); }
+.mech .stroke-only.on * { fill: none; stroke: var(--c); stroke-opacity: 1; }
+.mech .armor:not(.on), .mech .armor:not(.on) * { stroke: var(--ac, var(--hot)); stroke-width: 2.6; }
+.mech .gi.armor:not(.on) * { fill: color-mix(in srgb, var(--ac, #ff5c8a) 28%, #1a1726); }
+.mech .drop, .mech .drop * { fill: var(--c); opacity: .35; animation: flick .18s steps(2) infinite; filter: none; }
+.mech .locked, .mech .locked * { fill: none; stroke: #8a80b0; stroke-width: 1.2; stroke-dasharray: 3 2; opacity: .75; }
+.mech .wpn * { fill: var(--c); stroke: #fff; stroke-opacity: .5; stroke-width: 1; filter: drop-shadow(0 0 5px var(--c)); }
+.mech .wpn path { fill: none; stroke: var(--c); stroke-opacity: 1; stroke-width: 3; }
+.mech .wpn.drop { opacity: .35; animation: flick .18s steps(2) infinite; }
+.btn.special { border-color: var(--gold); color: var(--gold); }
+.btn.special:disabled { opacity: .45; cursor: not-allowed; border-color: var(--line); color: var(--mute); }
+.btn.special.live { background: var(--gold); color: #1a1405; }
+.stage-wrap.slowmo .stage { filter: saturate(.15) brightness(.55) blur(1px); transition: filter .6s; }
+.stage-wrap.slowmo .mech { transition: transform 1.2s; transform: translateX(-50%) scale(.96); }
+.stage-wrap.shred .stage { filter: saturate(1.6) brightness(1.15) hue-rotate(-15deg); }
+.mech .wpn.charged * { fill: var(--gold); filter: drop-shadow(0 0 9px var(--gold)); animation: charge .12s steps(2) infinite; }
+.mech .wpn.charged path { fill: none; stroke: var(--gold); stroke-width: 3; }
+@keyframes charge { 50% { filter: drop-shadow(0 0 3px var(--gold)); } }
+.pill.invuln { border-color: var(--gold); color: var(--gold); }
+.slots { display: flex; flex-wrap: wrap; gap: 8px; }
+.slotchip { border: 1px solid var(--line); background: var(--panel); border-radius: 9px; padding: 6px 10px; font-size: .8rem; display: grid; gap: 1px; min-width: 0; }
+.slotchip b { font-family: var(--f-display); font-size: .84rem; }
+.slotchip b span { font-family: var(--f-mono); font-weight: 500; color: var(--mute); margin-left: 6px; }
+.slotchip.full b span { color: var(--gold); }
+.slotchip em { font-style: normal; color: var(--mute); }
+.slotchip.locked { border-style: dashed; opacity: .75; }
+.mech.piloted [data-part="visor"] { fill: var(--hot); filter: drop-shadow(0 0 6px var(--hot)); }
+.mech.metal { filter: drop-shadow(0 0 14px var(--sc, var(--hot))); }
+@keyframes flick { 50% { opacity: .05; } }
+.hit-flash { position: absolute; inset: 0; background: rgba(255,40,70,.0); pointer-events: none; transition: background .4s; border-radius: 14px; }
+.hit-flash.on { background: rgba(255,40,70,.35); transition: none; }
+
+/* Transport strip */
+.transport { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.btn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
+.btn:hover { border-color: #4a4268; }
+.btn.play { background: var(--gold); color: #1a1405; border-color: var(--gold); min-width: 108px; justify-content: center; }
+.btn.pilot[aria-pressed="true"] { background: var(--hot); border-color: var(--hot); color: #fff; }
+.btn.hit { border-color: #6b2f42; }
+.btn kbd { font-family: var(--f-mono); font-size: .7rem; opacity: .65; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; }
+.clock { display: flex; align-items: center; gap: 12px; margin-left: auto; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.pips { display: flex; gap: 5px; }
+.pip { width: 12px; height: 12px; border-radius: 3px; background: var(--line); }
+.pip.on { background: var(--gold); }
+.pip.on.down { background: var(--hot); }
+.barpos { min-width: 7.5ch; }
+.chord { color: var(--gold); min-width: 3ch; }
+
+/* Channels */
+.section-label { font-family: var(--f-display); font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); margin: 4px 0 -6px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.ch {
+  --c: #888;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px;
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; position: relative; min-width: 0;
+}
+.ch .tog { all: unset; cursor: pointer; display: grid; min-width: 0; gap: 2px; border-radius: 8px; padding: 2px; }
+.ch .tog:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.ch .row1 { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ch .power { font-family: var(--f-display); font-weight: 700; font-size: 1.05rem; }
+.ch .layer { color: var(--mute); font-size: .88rem; }
+.ch .slot { font-family: var(--f-mono); font-size: .68rem; letter-spacing: .06em; color: var(--c); border: 1px solid var(--c); border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
+.ch .state { font-family: var(--f-mono); font-size: .72rem; color: var(--mute); display: flex; align-items: center; gap: 6px; }
+.ch .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.ch[data-state="on"] { border-color: var(--c); box-shadow: inset 0 0 0 1px var(--c), 0 0 18px -6px var(--c); }
+.ch[data-state="on"] .dot { background: var(--c); }
+.ch[data-state="queued"] .dot, .ch[data-state="leaving"] .dot { background: var(--c); animation: flick .5s steps(2) infinite; }
+.ch[data-state="dropped"] { border-color: #6b2f42; }
+.ch[data-state="dropped"] .dot { background: var(--hot); animation: flick .2s steps(2) infinite; }
+.ch .vol { display: flex; align-items: center; gap: 8px; font-family: var(--f-mono); font-size: .7rem; color: var(--mute); }
+.ch .vol input { flex: 1; min-width: 0; accent-color: var(--c); }
+.ch .vol output { min-width: 5ch; text-align: right; font-variant-numeric: tabular-nums; }
+.ch .key { position: absolute; top: 10px; right: 12px; }
+.ch .fx { font-size: .78rem; color: var(--mute); }
+
+/* Settings */
+.settings { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px 18px; align-items: start; }
+.field { display: grid; gap: 5px; min-width: 0; }
+.field label { font-size: .8rem; color: var(--mute); }
+.field select, .field input[type=range] { width: 100%; }
+select { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; font: inherit; font-size: .9rem; }
+.field .hint { font-size: .74rem; color: var(--mute); }
+.check { display: flex; gap: 8px; align-items: center; font-size: .9rem; }
+.check input { accent-color: var(--gold); width: 16px; height: 16px; }
+
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 10px; font-size: .9rem; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: calc(100% - 32px); }
+.toast.show { opacity: 1; }
+.notes { color: var(--mute); font-size: .86rem; max-width: 70ch; }
+.notes p { margin: 0 0 6px; }
+.notes b { color: var(--ink); font-weight: 600; }
+.meter { width: 70px; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--ok), var(--gold) 75%, var(--hot)); }
+.gear { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 12px; }
+.sets { display: grid; gap: 12px; }
+.gear.full { border-color: var(--sc); box-shadow: 0 0 0 1px var(--sc), 0 0 28px -8px var(--sc); }
+.gear-head h2 { color: var(--sc); }
+.gear-head { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; }
+.gear-head h2 { font-family: var(--f-display); font-size: 1.15rem; margin: 0; letter-spacing: .03em; }
+.gear-head h2 small { font-family: var(--f-mono); font-size: .75rem; color: var(--mute); font-weight: 500; margin-left: 8px; }
+.gear-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.gear-actions .btn { padding: 6px 12px; font-size: .85rem; }
+.pieces { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.piece { all: unset; box-sizing: border-box; cursor: pointer; border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; display: grid; gap: 2px; min-width: 0; }
+.piece:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.piece b { font-family: var(--f-display); font-size: .92rem; }
+.piece span { font-size: .78rem; color: var(--mute); }
+.piece[aria-pressed="true"] { border-style: solid; border-color: var(--sc); background: color-mix(in srgb, var(--sc) 9%, transparent); }
+.piece[aria-pressed="true"] b::before { content: "■ "; color: var(--sc); }
+.setbar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.setbar i { display: block; height: 100%; width: 0; background: var(--sc); transition: width .25s; }
+.gear-status { font-size: .88rem; color: var(--mute); }
+.gear-status b { color: var(--ink); }
+.gear.full .gear-status b { color: var(--sc); }
+@media (prefers-reduced-motion: reduce) { .mech .wpn.charged *, .mech .drop, .ch .dot { animation: none !important; } .stage { transition: none; } }
+@media (max-width: 560px) { .stage-hud { font-size: .68rem; padding: 10px; gap: 6px; } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .ch { padding: 10px; } .ch .fx { display: none; } .ch .power { font-size: .95rem; } .clock { margin-left: 0; width: 100%; justify-content: space-between; } .stage { height: 220px; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>The Great Warrior <span>Sound Lab</span></h1>
+    <div class="key-facts">
+      <span>Key <b>A minor</b></span>
+      <span>Loop <b>8 bars</b> · Am F C G</span>
+      <span>Tempo <b id="bpmFact">128</b> BPM</span>
+    </div>
+  </header>
+
+  <div class="stage-wrap">
+    <div class="stage" id="stage"></div>
+    <svg class="mech" id="mech" viewBox="0 0 200 212" role="img" aria-label="The Amp Rig mech, with its gear slots lit by the power-ups and set pieces in use">
+      <g data-part="cape" class="gi"><title>Back: Chorus Cloak</title><polygon points="72,40 128,40 144,150 56,150"/></g>
+      <g class="locked"><title>Back mount (locked): shoulder launchers and mounted weapon systems</title><rect x="140" y="2" width="24" height="28" rx="3"/><rect x="146" y="8" width="12" height="4"/><rect x="146" y="16" width="12" height="4"/></g>
+      <rect data-part="thighR" x="80" y="106" width="17" height="40" rx="3"><title>Legs: base beat</title></rect>
+      <rect data-part="thighL" x="103" y="106" width="17" height="40" rx="3"><title>Legs: base beat</title></rect>
+      <rect data-part="shinR" x="77" y="147" width="22" height="44" rx="4"><title>Shins: Thunderstep Greaves</title></rect>
+      <rect data-part="shinL" x="101" y="147" width="22" height="44" rx="4"><title>Shins: Thunderstep Greaves</title></rect>
+      <rect data-part="footR" x="71" y="192" width="30" height="11" rx="3"><title>Feet: base beat</title></rect>
+      <rect data-part="footL" x="99" y="192" width="30" height="11" rx="3"><title>Feet: base beat</title></rect>
+      <rect class="locked" x="67" y="96" width="10" height="22" rx="2"><title>Belt charm socket (locked): extra charms</title></rect>
+      <rect class="locked" x="123" y="96" width="10" height="22" rx="2"><title>Belt charm socket (locked): extra charms</title></rect>
+      <rect class="locked" x="70" y="160" width="6" height="18" rx="1"><title>Leg hardpoint (locked): platforms</title></rect>
+      <rect class="locked" x="124" y="160" width="6" height="18" rx="1"><title>Leg hardpoint (locked): platforms</title></rect>
+      <rect data-part="waist" x="77" y="93" width="46" height="15" rx="3"><title>Waist: Low-End Girdle</title></rect>
+      <polygon data-part="torso" points="68,36 132,36 124,94 76,94"><title>Torso</title></polygon>
+      <circle data-part="core" cx="100" cy="60" r="12"><title>Chest slot: runes (Lightning Rune)</title></circle>
+      <circle class="trim" cx="100" cy="60" r="6"/>
+      <circle class="locked" cx="100" cy="84" r="5"><title>Aux core bay (locked): extra cores</title></circle>
+      <rect data-part="head" x="86" y="8" width="28" height="26" rx="6"><title>Head: Banshee Helm</title></rect>
+      <rect data-part="visor" x="90" y="16" width="20" height="7" rx="2"><title>Cockpit visor: lights up in Pilot mode</title></rect>
+      <line class="trim" x1="110" y1="9" x2="117" y2="1"/>
+      <rect data-part="armR" x="46" y="66" width="18" height="32" rx="4"><title>Upper arm</title></rect>
+      <rect data-part="armL" x="136" y="66" width="18" height="32" rx="4"><title>Upper arm</title></rect>
+      <rect data-part="spkR" x="36" y="33" width="34" height="34" rx="5"><title>Shoulder speaker: charms (Heart Charm)</title></rect>
+      <circle class="trim cone" cx="53" cy="50" r="10"/>
+      <rect data-part="spkL" x="130" y="33" width="34" height="34" rx="5"><title>Shoulder speaker: charms (Heart Charm)</title></rect>
+      <circle class="trim cone" cx="147" cy="50" r="10"/>
+      <rect data-part="foreR" x="44" y="98" width="22" height="32" rx="4"><title>Right forearm</title></rect>
+      <rect data-part="foreL" x="134" y="98" width="22" height="32" rx="4"><title>Left forearm: Guardian Shield</title></rect>
+      <rect data-part="handR" x="47" y="130" width="16" height="14" rx="3"><title>Right hand: weapon slot</title></rect>
+      <rect data-part="handL" x="137" y="130" width="16" height="14" rx="3"><title>Left hand: weapon slot</title></rect>
+      <g id="wpnR" transform="translate(55 142)"></g>
+      <g id="wpnL" transform="translate(145 142)"></g>
+      <g data-part="shield" class="gi"><title>Guardian Shield</title><polygon points="152,98 174,104 174,126 152,132"/></g>
+    </svg>
+    <div class="hit-flash" id="hitFlash"></div>
+    <div class="stage-hud">
+      <span class="pill" id="layerPill">Layers 0 / 16</span>
+      <span class="pill" id="powerPill">Autopilot · 60%</span>
+    </div>
+  </div>
+
+  <div class="slots" id="slots" aria-label="Rig slots"></div>
+
+  <div class="transport">
+    <button class="btn play" id="playBtn" type="button">▶ Play <kbd>Space</kbd></button>
+    <button class="btn pilot" id="pilotBtn" type="button" aria-pressed="false">Take control <kbd>P</kbd></button>
+    <button class="btn hit" id="hitBtn" type="button">Take a hit <kbd>H</kbd></button>
+    <button class="btn" id="resetBtn" type="button">New run <kbd>R</kbd></button>
+    <button class="btn special" id="specialBtn" type="button" disabled>Shred special <kbd>X</kbd></button>
+    <div class="clock" aria-live="off">
+      <div class="pips" id="pips"><i class="pip"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i></div>
+      <span class="barpos" id="barpos">Bar 1.1</span>
+      <span class="chord" id="chord">Am</span>
+      <span class="meter" title="Output level"><i id="meter"></i></span>
+    </div>
+  </div>
+
+  <div class="section-label">Power-ups · tap to pick up or drop · each layer enters on the next bar</div>
+  <div class="grid" id="grid"></div>
+
+  <div class="section-label">Gear sets · each piece plays as soon as it’s equipped · one armor piece per body slot</div>
+  <div class="sets" id="sets"></div>
+
+  <div class="section-label">Transition rules to tweak</div>
+  <div class="settings">
+    <div class="field">
+      <label for="quant">Layers change on</label>
+      <select id="quant">
+        <option value="1m" selected>Next bar</option>
+        <option value="2m">Next 2-bar phrase</option>
+        <option value="4m">Next 4-bar phrase</option>
+        <option value="4n">Next beat</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="entry">How a new layer enters</label>
+      <select id="entry">
+        <option value="snap" selected>Snap in on the downbeat</option>
+        <option value="swell">Swell up into the downbeat</option>
+        <option value="fade">Fade in over one bar</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="exit">How a layer leaves</label>
+      <select id="exit">
+        <option value="0.02">Cut on the bar line</option>
+        <option value="4n" selected>Fade over one beat</option>
+        <option value="1m">Fade over one bar</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="dropBars">Dropout length</label>
+      <select id="dropBars">
+        <option value="1">1 bar</option>
+        <option value="2" selected>2 bars</option>
+        <option value="4">4 bars</option>
+      </select>
+      <span class="hint">Each extra hit drops the next newest layer and restarts the timer.</span>
+    </div>
+    <div class="field">
+      <label for="tier">Layer slots (tier)</label>
+      <select id="tier">
+        <option value="3">Solo · beat + 3</option>
+        <option value="6">Band · beat + 6</option>
+        <option value="9">Ensemble · beat + 9</option>
+        <option value="16" selected>Walking Symphony · beat + 16</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="tempo">Tempo <output id="tempoOut">128</output> BPM</label>
+      <input type="range" id="tempo" min="100" max="150" step="1" value="128">
+    </div>
+    <div class="field">
+      <span class="check"><input type="checkbox" id="pump" checked><label for="pump">Sidechain pump on melodic layers</label></span>
+      <span class="hint">Ducks pads, choir, strings, arp and funk bass on every kick.</span>
+    </div>
+    <div class="field">
+      <label for="master">Master volume</label>
+      <input type="range" id="master" min="-30" max="0" step="1" value="-6">
+    </div>
+  </div>
+
+  <div class="notes">
+    <p><b>How to use it.</b> Press Play to hear the lone EDM beat, then pick up power-ups with the cards or keys 1 to 8. Every layer is playing silently in sync from the start, so a pickup only opens its fader on the next bar line. “Take control” drops the rock drum kit in on the next bar with a crash, and lets it fade at the bar line when you let go. “Take a hit” triggers Dropout: the newest layer cuts out on the next eighth note and returns on a bar line after the Dropout length.</p>
+    <p><b>Gear sets.</b> Power Metal, Synthwave and Orchestral all work the same way. Each set has five armor pieces (head, back, forearms, waist, legs) and weapons that use the Rig’s hands: one two-handed weapon that counts as two pieces, or two one-handed weapons. Each piece plays its member as soon as you equip it. One to three pieces sound loose and muffled, four or more lock together, and piloting brings them to full power. Only one armor piece fits each body slot, so sets can be mixed, but only one can be complete at a time. A full set unlocks its special (X, every 30 seconds): time slows for a bar, then the music snaps back for a solo while you are invincible for 10 seconds. With the two one-handed weapons the solo becomes a duel. A full set plus Pilot mode fires the set bonus: the lead vocal comes in and everything else ducks under.</p>
+    <p><b>Everything you hear is synthesized live in your browser.</b> No samples or recordings are used, so there is nothing to license. These are placeholder sounds to test the system and the arrangement, not final music.</p>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<script>
+(() => {
+"use strict";
+const STEPS = 128;             // 8 bars of 16th notes
+const BAR = 16;
+// Chord table: Am | F | C | G, repeated for 8 bars
+const CH = [
+  { name: "Am", bass: ["A1","A2","E2"], pad: ["A3","C4","E4"], choir: ["E4","A4","C5"], arp: ["A4","C5","E5","A5"], str: ["A3","A4","E4","A4"], wob: "A1" },
+  { name: "F",  bass: ["F1","F2","C2"], pad: ["A3","C4","F4"], choir: ["F4","A4","C5"], arp: ["F4","A4","C5","F5"], str: ["F3","F4","C4","F4"], wob: "F1" },
+  { name: "C",  bass: ["C2","C3","G2"], pad: ["G3","C4","E4"], choir: ["E4","G4","C5"], arp: ["G4","C5","E5","G5"], str: ["C4","C5","G4","C5"], wob: "C2" },
+  { name: "G",  bass: ["G1","G2","D2"], pad: ["G3","B3","D4"], choir: ["D4","G4","B4"], arp: ["G4","B4","D5","G5"], str: ["G3","G4","D4","G4"], wob: "G1" },
+];
+const chordAt = step => CH[Math.floor(step / BAR) % 4];
+const s16 = () => Tone.Time("16n").toSeconds();
+const beatSec = () => Tone.Time("4n").toSeconds();
+
+// Flute melody: [step, note, lengthInSteps]
+const MELODY = [
+  [0,"E5",2],[2,"A5",2],[4,"C6",3],[7,"B5",1],[8,"A5",4],[12,"E5",4],
+  [16,"F5",2],[18,"A5",2],[20,"C6",4],[24,"D6",2],[26,"C6",2],[28,"A5",4],
+  [32,"G5",2],[34,"C6",2],[36,"E6",4],[40,"D6",2],[42,"C6",2],[44,"G5",4],
+  [48,"B5",3],[51,"A5",1],[52,"G5",2],[54,"D5",2],[56,"G5",6],
+  [64,"E5",2],[66,"A5",2],[68,"C6",3],[71,"B5",1],[72,"A5",2],[74,"C6",2],[76,"E6",4],
+  [80,"F6",3],[83,"E6",1],[84,"C6",4],[88,"A5",4],[92,"C6",4],
+  [96,"E6",2],[98,"D6",2],[100,"C6",2],[102,"G5",2],[104,"E5",4],[108,"G5",4],
+  [112,"B5",4],[116,"D6",4],[120,"B5",2],[122,"G5",2],[124,"A5",4],
+];
+const MEL = new Map(MELODY.map(m => [m[0], m]));
+// Taiko: 2-bar pattern [stepIn32, velocity, isRim]
+const TAIKO = new Map([[0,[1,0]],[3,[.45,0]],[6,[.6,0]],[8,[.9,0]],[12,[.5,1]],[14,[.6,1]],[16,[1,0]],[19,[.45,0]],[22,[.6,0]],[24,[.8,0]],[26,[.55,0]],[28,[.7,0]],[29,[.5,1]],[30,[.85,0]],[31,[.6,1]]]);
+// Funk bass per bar: [step, which(0 root,1 octave,2 fifth), len, vel]
+const FUNK = new Map([[0,[0,2,1]],[3,[0,1,.7]],[4,[1,1,.5]],[6,[0,1,.8]],[7,[1,1,.6]],[10,[0,2,.9]],[12,[2,1,.7]],[14,[1,1,.75]],[15,[0,1,.5]]]);
+// Wobble rates (cycles per beat), one row per bar
+const WOB_RATES = [[2,2,4,8],[3,3,2,1],[2,4,2,6],[1,2,4,8]];
+const ARP_ORDER = [0,1,2,3,2,1,2,3];
+
+// ================= Gear sets: one reusable engine =================
+// A set = 5 armor pieces (one per body slot) + weapons that use the Rig's hands, covering 7 members.
+// Each equipped piece plays its member right away, scaled by how much of the set is on:
+//   loose (1-3 members, autopilot): sparse parts behind a muffled filter
+//   tight (4+ members, or piloting): parts lock together, filter opens
+//   full  (all 7 + Pilot mode): set bonus, lead vocal, everything else ducks under
+// A full set unlocks its special: the two-handed weapon gives a solo, the two one-handed weapons a duel.
+// To add a set: call defineSet() with pieces, build(out) returning instruments, play(I, x) per 16th step,
+// and special.line(soloBar, chord) returning { notes: [midi...], sub: 1 | 2 }.
+const BODY = {
+  head:  { label: "Head",     parts: ["head"] },
+  back:  { label: "Back",     parts: ["cape"] },
+  arms:  { label: "Forearms", parts: ["foreR", "foreL"] },
+  waist: { label: "Waist",    parts: ["waist"] },
+  legs:  { label: "Legs",     parts: ["shinR", "shinL"] },
+};
+const SET_SIZE = 7;
+const SETS = {};
+const PIECE = {};
+function defineSet(def) { SETS[def.id] = def; for (const p of def.pieces) { p.set = def.id; PIECE[p.id] = p; } }
+const pieceById = id => PIECE[id];
+const equipped = new Set();
+const gearOrder = {}, gearHand = {};
+const membersOf = setId => new Set([...equipped].filter(id => PIECE[id].set === setId).flatMap(id => PIECE[id].covers));
+const RT = {};            // per-set runtime: bus, filter, instruments
+let setNow = {};          // per-set member snapshot taken on each bar line
+let fullSet = null;       // set whose full bonus is active
+let setEntry = false;
+let pilotNow = false;
+const up12 = n => Tone.Frequency(n).transpose(12).toNote();
+const melody = rows => new Map(rows.map(r => [r[0], r]));
+const VOWEL = { a: [800, 1150, 2900], o: [450, 800, 2830], u: [320, 870, 2240], sop: [950, 1450, 3000] };
+function mkFormant(input, vowel, out, qs = [5, 6, 8]) {
+  return vowel.map((f, i) => { const bp = new Tone.Filter({ type: "bandpass", frequency: f, Q: qs[i] }); const g = new Tone.Gain([1, 0.5, 0.22][i]); input.connect(bp); bp.connect(g); g.connect(out); return bp; });
+}
+function mkVoice(dest, o) {
+  const pan = new Tone.Panner(0);
+  const vib = new Tone.Vibrato(o.vibF || 6, o.vibD || 0.03);
+  const fx = new Tone.FeedbackDelay({ delayTime: o.delay || "16n", feedback: 0.2, wet: o.wet ?? 0.15 });
+  const lp = new Tone.Filter({ type: "lowpass", frequency: o.lp || 6000 });
+  const pre = o.dist ? [new Tone.Distortion({ distortion: o.dist, oversample: "2x" })] : [];
+  const syn = new Tone.Synth({ oscillator: { type: o.osc || "sawtooth" }, envelope: o.env || { attack: 0.002, decay: 0.08, sustain: 0.7, release: 0.05 }, portamento: o.port ?? 0.006 });
+  syn.chain(...pre, lp, vib, fx, pan, dest);
+  syn.volume.value = o.vol ?? -9;
+  return { syn, pan, vib };
+}
+const mid = n => Tone.Frequency(n).toMidi();
+const AMIN = (() => { const pcs = [9, 11, 0, 2, 4, 5, 7], out = []; for (let m = 40; m <= 100; m++) if (pcs.includes(m % 12)) out.push(m); return out; })();
+const idxOf = m => { let i = AMIN.findIndex(x => x >= m); return i < 0 ? AMIN.length - 1 : i; };
+const sc = i => AMIN[Math.max(0, Math.min(AMIN.length - 1, i))];
+const triOf = c => c.arp.slice(0, 3).map(mid);
+
+// ---------------- Power Metal ----------------
+const PC = { Am: ["A2","E3","A3"], F: ["F2","C3","F3"], C: ["C3","G3","C4"], G: ["G2","D3","G3"] };
+const GALLOP = new Set([0,2,3,4,6,7,8,10,11,12,14,15]);
+const SWEEP = [0,1,2,3,4,5,6,5,4,3,2,1,2,3,4,5];
+const RUN = (() => { const out = []; let m = 93; const steps = [2,2,1,2,2,1,2]; for (let i = 0; i < 32; i++) { out.push(Tone.Frequency(m, "midi").toNote()); m -= steps[i % 7]; } return out; })();
+const PM_VOX = melody([
+  [0,"E4",4,"o"],[4,"A4",4,"a"],[8,"C5",4,"o"],[12,"B4",4,"a"],
+  [16,"A4",6,"o"],[22,"G4",2,"a"],[24,"F4",4,"o"],[28,"A4",4,"a"],
+  [32,"G4",4,"o"],[36,"E4",4,"a"],[40,"C4",4,"o"],[44,"E4",4,"a"],
+  [48,"D4",6,"o"],[54,"E4",2,"a"],[56,"G4",4,"o"],[60,"B4",4,"a"],
+  [64,"A4",2,"o"],[66,"C5",2,"a"],[68,"E5",12,"a"],
+  [80,"D5",4,"o"],[84,"C5",4,"a"],[88,"A4",8,"o"],
+  [96,"G4",4,"o"],[100,"C5",4,"a"],[104,"E5",8,"a"],
+  [112,"D5",8,"o"],[120,"B4",4,"a"],[124,"G4",4,"o"],
+]);
+defineSet({
+  id: "pm", name: "Power Metal", color: "#ff5c8a", key: "M",
+  loose: "Loose: sparse and muffled", tight: "Locked in: the band plays one gallop together",
+  pieces: [
+    { id: "pm-greaves", body: "legs",  covers: ["drums"],  item: "Thunderstep Greaves", member: "Drummer",        adds: "double-kick" },
+    { id: "pm-girdle",  body: "waist", covers: ["bass"],   item: "Low-End Girdle",      member: "Bassist",        adds: "metal bass" },
+    { id: "pm-bracers", body: "arms",  covers: ["keys"],   item: "Keytar Bracers",      member: "Keyboardist",    adds: "synth stabs" },
+    { id: "pm-cloak",   body: "back",  covers: ["choir"],  item: "Chorus Cloak",        member: "Backing vocals", adds: "“oh” backing choir" },
+    { id: "pm-helm",    body: "head",  covers: ["vocals"], item: "Banshee Helm",        member: "Lead vocalist",  adds: "lead vocals" },
+    { id: "pm-axe",     hands: 2, covers: ["lead", "rhythm"], item: "Lightning Axe", member: "Lead + rhythm guitar", adds: "gallop riffs and shred runs", note: "Two-handed · counts as 2" },
+    { id: "pm-hatchet", hands: 1, covers: ["lead"],   item: "Shred Hatchet", member: "Lead guitar",   adds: "shred runs",   note: "One-handed" },
+    { id: "pm-cleaver", hands: 1, covers: ["rhythm"], item: "Riff Cleaver",  member: "Rhythm guitar", adds: "gallop riffs", note: "One-handed" },
+  ],
+  wpn: {
+    "pm-axe":     '<rect x="-16" y="-4" width="16" height="9" rx="2"/><rect x="0" y="-1" width="92" height="4" rx="1"/><polygon points="88,-5 104,-24 126,-15 117,2 126,22 104,24 88,8"/>',
+    "pm-hatchet": '<rect x="-1.5" y="2" width="3" height="42" rx="1"/><polygon points="-2,6 -17,-2 -19,18 -2,15"/>',
+    "pm-cleaver": '<rect x="-1.5" y="2" width="3" height="18"/><rect x="-1" y="18" width="15" height="28" rx="2"/>',
+  },
+  special: {
+    name: "Shred special", duel: "Dueling axes", two: "pm-axe", pair: ["pm-hatchet", "pm-cleaver"], duelOffset: 0,
+    voice: { dist: 0.9, lp: 6200, delay: "16n", vibF: 6.2, vibD: 0.025 },
+    voiceB: { dist: 0.9, lp: 5600, delay: "16n", vibF: 5.8, vibD: 0.025 },
+    // Original shred phrases: pedal-tone climb, sweeps, descending fours, tapped triads, climb
+    line(sb, c) {
+      const root = mid(c.arp[0]), tri = triOf(c), out = [];
+      for (let i = 0; i < 32; i++) {
+        if (sb === 0) { const hi = idxOf(root + 12); out.push(i % 2 === 0 ? sc(hi) : sc(hi + 1 + ((i >> 1) % 7))); }
+        else if (sb === 1) { const t = [tri[0], tri[1], tri[2], tri[0] + 12, tri[1] + 12, tri[2] + 12, tri[0] + 24]; out.push(t[[0,1,2,3,4,5,6,5,4,3,2,1][i % 12]]); }
+        else if (sb === 2) { const top = idxOf(root + 24); out.push(sc(top - Math.floor(i / 4) - (i % 4))); }
+        else if (sb === 3) { out.push([tri[0] + 24, tri[2] + 12, tri[1] + 12, tri[2] + 12][i % 4]); }
+        else out.push(sc(idxOf(root) + Math.floor(i * 14 / 31)));
+      }
+      return { notes: out, sub: 2 };
+    },
+  },
+  build(out) {
+    const I = {};
+    const msnHP = new Tone.Filter({ type: "highpass", frequency: 1300 }).connect(out);
+    I.snare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.16, sustain: 0 } }).connect(msnHP);
+    I.snBody = new Tone.MembraneSynth({ pitchDecay: 0.015, octaves: 1.5, envelope: { attack: 0.001, decay: 0.1, sustain: 0 } }).connect(out);
+    I.snBody.volume.value = -3;
+    I.kick = new Tone.MembraneSynth({ pitchDecay: 0.012, octaves: 3.5, envelope: { attack: 0.001, decay: 0.11, sustain: 0 } }).connect(out);
+    I.kick.volume.value = -2;
+    const gtrHP = new Tone.Filter({ type: "highpass", frequency: 85 });
+    const gtrOut = new Tone.Gain(0.55).connect(out);
+    gtrHP.chain(new Tone.Distortion({ distortion: 0.95, oversample: "2x" }), new Tone.Filter({ type: "lowpass", frequency: 3800, rolloff: -24 }), gtrOut);
+    I.gtr = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 14 }, envelope: { attack: 0.002, decay: 0.08, sustain: 0.7, release: 0.04 } }).connect(gtrHP);
+    I.gtr.maxPolyphony = 9;
+    I.bass = new Tone.MonoSynth({ oscillator: { type: "sawtooth" }, filter: { Q: 1, type: "lowpass", rolloff: -24 },
+      envelope: { attack: 0.002, decay: 0.1, sustain: 0.5, release: 0.04 }, filterEnvelope: { attack: 0.001, decay: 0.08, sustain: 0.3, baseFrequency: 220, octaves: 2.5 } }).connect(new Tone.Distortion(0.3).connect(out));
+    I.bass.volume.value = -6;
+    const leadDelay = new Tone.FeedbackDelay({ delayTime: "8n.", feedback: 0.3, wet: 0.25 }).connect(out);
+    const leadVib = new Tone.Vibrato(6, 0.04).connect(leadDelay);
+    const leadCab = new Tone.Filter({ type: "lowpass", frequency: 5200 }).connect(leadVib);
+    I.lead = new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.003, decay: 0.1, sustain: 0.6, release: 0.05 }, portamento: 0.008 }).connect(new Tone.Distortion(0.85).connect(leadCab));
+    I.lead.volume.value = -13;
+    I.keys = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsquare", count: 2, spread: 12 }, envelope: { attack: 0.005, decay: 0.25, sustain: 0.4, release: 0.2 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 2600 }).connect(out));
+    I.keys.maxPolyphony = 8; I.keys.volume.value = -14;
+    const chIn = new Tone.Vibrato(4.8, 0.05);
+    mkFormant(chIn, VOWEL.o, new Tone.Gain(2.6).connect(out));
+    I.choir = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 16 }, envelope: { attack: 0.35, decay: 0.2, sustain: 0.9, release: 1.0 } }).connect(chIn);
+    I.choir.maxPolyphony = 8;
+    const voxOut = new Tone.Gain(4.2).connect(new Tone.Distortion(0.12).connect(new Tone.FeedbackDelay({ delayTime: "4n", feedback: 0.22, wet: 0.2 }).connect(out)));
+    const voxIn = new Tone.Vibrato(5.6, 0.09);
+    I.voxF = mkFormant(voxIn, VOWEL.a, voxOut);
+    I.vox = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 3, spread: 10 }, envelope: { attack: 0.05, decay: 0.2, sustain: 0.85, release: 0.3 }, portamento: 0.04 }).connect(voxIn);
+    return I;
+  },
+  play(I, x) {
+    const { inBar, bar, step, c, d, time, has, tight, pilot, full, solo } = x;
+    const pc = PC[c.name];
+    if (has("drums")) {
+      if (pilot) I.kick.triggerAttackRelease("D1", "32n", time, inBar % 4 === 0 ? 1 : 0.78);
+      else if (tight ? GALLOP.has(inBar) : inBar % 2 === 0) I.kick.triggerAttackRelease("D1", "32n", time, inBar % 4 === 0 ? 0.9 : 0.6);
+      if (!pilot && (inBar === 4 || inBar === 12)) { I.snare.triggerAttackRelease("16n", time, 0.9); I.snBody.triggerAttackRelease("D3", "16n", time, 0.9); }
+    }
+    if (has("rhythm")) {
+      const hit = tight ? GALLOP.has(inBar) : inBar % 4 === 0;
+      if (inBar === 0 || (tight && inBar === 8 && bar % 2 === 1)) I.gtr.triggerAttackRelease(pc, d * (tight ? 1.8 : 3.6), time, 1);
+      else if (hit) I.gtr.triggerAttackRelease(pc.slice(0, 2), 0.07, time, inBar % 4 === 0 ? 0.85 : 0.65);
+    }
+    if (has("bass") && (tight ? GALLOP.has(inBar) : (inBar === 0 || inBar === 8)))
+      I.bass.triggerAttackRelease(c.bass[0], tight ? (inBar === 0 ? d * 1.8 : 0.08) : d * 7, time, inBar % 4 === 0 ? 1 : 0.7);
+    if (has("lead") && !solo) {
+      const fillBar = bar % 4 === 3;
+      if (fillBar && tight) { const i = inBar * 2; I.lead.triggerAttackRelease(RUN[i], d * 0.45, time, 0.9); I.lead.triggerAttackRelease(RUN[i + 1], d * 0.45, time + d / 2, 0.8); }
+      else if ((pilot && !full && !fillBar) || (!tight && fillBar && inBar % 2 === 0)) {
+        const tones = [...c.arp, ...c.arp.slice(1).map(up12)];
+        I.lead.triggerAttackRelease(tones[SWEEP[inBar]], d * (tight ? 0.9 : 1.8), time, inBar % 4 === 0 ? 0.95 : 0.75);
+      }
+    }
+    if (has("keys") && (inBar === 0 || (tight && (inBar === 6 || inBar === 10)))) I.keys.triggerAttackRelease(c.pad.map(up12), inBar === 0 ? d * 3 : d * 1.2, time, 0.8);
+    if (has("choir") && inBar === 0) I.choir.triggerAttackRelease(c.choir, d * 15.5, time, tight ? 0.7 : 0.5);
+    if (has("vocals") && !solo) {
+      const v = PM_VOX.get(step);
+      if (v && (full || (pilot && step >= 64) || step === 68 || step === 104)) {
+        I.vox.triggerAttackRelease(v[1], v[2] * d * 0.95, time, full ? 0.9 : 0.7);
+        VOWEL[v[3]].forEach((f, i) => I.voxF[i].frequency.setTargetAtTime(f, time, 0.03));
+      }
+    }
+  },
+});
+
+// ---------------- Synthwave ----------------
+const SW_VOX = melody([
+  [0,"A4",6],[6,"C5",2],[8,"E5",8],[16,"D5",4],[20,"C5",4],[24,"A4",8],
+  [32,"G4",4],[36,"C5",4],[40,"E5",6],[46,"D5",2],[48,"B4",12],[60,"G4",4],
+  [64,"A4",4],[68,"E5",4],[72,"G5",8],[80,"F5",6],[86,"E5",2],[88,"C5",8],
+  [96,"E5",4],[100,"G5",4],[104,"E5",8],[112,"D5",8],[120,"B4",8],
+]);
+const SW_LEAD = melody([
+  [0,"A5",8],[8,"C6",4],[12,"E6",4],[16,"F6",8],[24,"E6",4],[28,"C6",4],
+  [32,"E6",8],[40,"G6",4],[44,"E6",4],[48,"E5",2],[50,"G5",2],[52,"B5",4],[56,"D6",4],[60,"B5",4],
+  [64,"A5",4],[68,"C6",4],[72,"E6",8],[80,"F6",4],[84,"A6",4],[88,"G6",8],
+  [96,"E6",8],[104,"C6",8],[112,"E6",4],[116,"D6",4],[120,"B5",2],[122,"G5",2],[124,"E5",4],
+]);
+const SW_ARP = [0,1,2,3,2,1,2,3,0,1,2,3,3,2,1,2];
+defineSet({
+  id: "sw", name: "Synthwave", color: "#5ee7ff", key: "N",
+  loose: "Loose: a far-off car radio", tight: "Locked in: the night drive kicks in",
+  pieces: [
+    { id: "sw-boots",     body: "legs",  covers: ["drums"], item: "Drive Boots",     member: "Drum machine",  adds: "gated-snare drums" },
+    { id: "sw-belt",      body: "waist", covers: ["bass"],  item: "Pulse Belt",      member: "Bass synth",    adds: "octave pulse bass" },
+    { id: "sw-gauntlets", body: "arms",  covers: ["arp"],   item: "Grid Gauntlets",  member: "Arpeggiator",   adds: "echoing arpeggio" },
+    { id: "sw-cape",      body: "back",  covers: ["pads"],  item: "Chrome Cape",     member: "Pad synth",     adds: "lush chorus pads" },
+    { id: "sw-visor",     body: "head",  covers: ["vox"],   item: "Neon Visor",      member: "Robot vocalist", adds: "robot “oo” vocals" },
+    { id: "sw-railgun",   hands: 2, covers: ["lead", "brass"], item: "Outrun Railgun", member: "Lead + brass synth", adds: "soaring lead and synth brass", note: "Two-handed · counts as 2" },
+    { id: "sw-blade",     hands: 1, covers: ["lead"],  item: "Neon Blade",  member: "Lead synth",  adds: "soaring lead",  note: "One-handed" },
+    { id: "sw-pistol",    hands: 1, covers: ["brass"], item: "Laser Pistol", member: "Brass synth", adds: "synth brass stabs", note: "One-handed" },
+  ],
+  wpn: {
+    "sw-railgun": '<rect x="-14" y="-4" width="22" height="9" rx="2"/><rect x="8" y="-2" width="96" height="5" rx="2"/><rect x="40" y="-7" width="30" height="4" rx="1"/><circle cx="108" cy="0.5" r="5"/>',
+    "sw-blade":   '<rect x="-6" y="0" width="12" height="4" rx="1"/><rect x="-1.5" y="4" width="3" height="58" rx="1.5"/>',
+    "sw-pistol":  '<rect x="-3" y="0" width="7" height="14" rx="2"/><rect x="-3" y="-2" width="24" height="7" rx="2"/>',
+  },
+  special: {
+    name: "Neon Overdrive", duel: "Laser duel", two: "sw-railgun", pair: ["sw-blade", "sw-pistol"], duelOffset: 0,
+    voice:  { osc: "fatsawtooth", lp: 7000, delay: "8n.", wet: 0.25, vibF: 5.5, vibD: 0.04, port: 0.03, vol: -11 },
+    voiceB: { osc: "square", lp: 4200, delay: "8n.", wet: 0.25, vibF: 5, vibD: 0.03, port: 0.02, vol: -13 },
+    // Octave glides, rolling arps, falling pairs, then 32nd shimmer and a climb
+    line(sb, c) {
+      const root = mid(c.arp[0]), tri = triOf(c), out = [];
+      if (sb === 0) { for (let i = 0; i < 16; i++) { const t = tri[(i >> 1) % 3] + 12; out.push(i % 2 ? t + 12 : t); } return { notes: out, sub: 1 }; }
+      if (sb === 1) { const t = [tri[0], tri[1], tri[2], tri[0] + 12, tri[1] + 12, tri[2] + 12, tri[0] + 24, tri[1] + 24]; for (let i = 0; i < 16; i++) out.push(t[[0,1,2,3,4,5,6,7,6,5,4,3,2,3,4,5][i]]); return { notes: out, sub: 1 }; }
+      if (sb === 2) { const top = idxOf(root + 24); for (let i = 0; i < 16; i++) out.push(sc(top - Math.floor(i / 2) - (i % 2) * 2)); return { notes: out, sub: 1 }; }
+      if (sb === 3) { for (let i = 0; i < 32; i++) out.push([tri[0] + 24, tri[1] + 24, tri[2] + 12, tri[1] + 12][i % 4]); return { notes: out, sub: 2 }; }
+      for (let i = 0; i < 32; i++) out.push(sc(idxOf(root + 12) + Math.floor(i * 8 / 31)));
+      return { notes: out, sub: 2 };
+    },
+  },
+  build(out) {
+    const I = {};
+    I.kick = new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 5, envelope: { attack: 0.001, decay: 0.3, sustain: 0 } }).connect(out);
+    const snBP = new Tone.Filter({ type: "bandpass", frequency: 1700, Q: 0.7 }).connect(out);
+    I.snare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.06, sustain: 0.45, release: 0.004 } }).connect(snBP);   // held then cut: gated-reverb feel
+    I.snBody = new Tone.MembraneSynth({ pitchDecay: 0.02, octaves: 1.2, envelope: { attack: 0.001, decay: 0.12, sustain: 0 } }).connect(out);
+    I.snBody.volume.value = -6;
+    I.hat = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.03, sustain: 0 } }).connect(new Tone.Filter({ type: "highpass", frequency: 9000 }).connect(out));
+    I.hat.volume.value = -12;
+    I.bass = new Tone.MonoSynth({ oscillator: { type: "sawtooth" }, filter: { Q: 2, type: "lowpass", rolloff: -24 },
+      envelope: { attack: 0.002, decay: 0.12, sustain: 0.4, release: 0.05 }, filterEnvelope: { attack: 0.001, decay: 0.1, sustain: 0.2, baseFrequency: 260, octaves: 2.6 } }).connect(out);
+    I.bass.volume.value = -5;
+    const pp = new Tone.PingPongDelay({ delayTime: "8n.", feedback: 0.35, wet: 0.3 }).connect(out);
+    I.arp = new Tone.Synth({ oscillator: { type: "square" }, envelope: { attack: 0.002, decay: 0.1, sustain: 0.1, release: 0.06 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 3200 }).connect(pp));
+    I.arp.volume.value = -16;
+    const chorus = new Tone.Chorus(3, 3.5, 0.6).start();
+    chorus.chain(new Tone.Filter({ type: "lowpass", frequency: 2400 }), out);
+    I.pads = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 3, spread: 40 }, envelope: { attack: 0.6, decay: 0.4, sustain: 0.8, release: 1.5 } }).connect(chorus);
+    I.pads.maxPolyphony = 10; I.pads.volume.value = -12;
+    const voxIn = new Tone.Vibrato(4.5, 0.03);
+    I.voxF = mkFormant(voxIn, VOWEL.u, new Tone.Gain(4.5).connect(new Tone.Chorus(2, 2, 0.4).start().connect(out)));
+    I.vox = new Tone.Synth({ oscillator: { type: "fatsquare", count: 2, spread: 8 }, envelope: { attack: 0.06, decay: 0.2, sustain: 0.85, release: 0.4 }, portamento: 0.05 }).connect(voxIn);
+    const leadFx = new Tone.FeedbackDelay({ delayTime: "8n.", feedback: 0.32, wet: 0.28 }).connect(out);
+    I.lead = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 2, spread: 20 }, envelope: { attack: 0.03, decay: 0.2, sustain: 0.75, release: 0.3 }, portamento: 0.05 }).connect(new Tone.Vibrato(5.5, 0.06).connect(new Tone.Filter({ type: "lowpass", frequency: 5000 }).connect(leadFx)));
+    I.lead.volume.value = -15;
+    I.brass = new Tone.PolySynth(Tone.MonoSynth, { oscillator: { type: "sawtooth" }, filter: { Q: 1, type: "lowpass" },
+      envelope: { attack: 0.02, decay: 0.25, sustain: 0.45, release: 0.2 }, filterEnvelope: { attack: 0.04, decay: 0.25, sustain: 0.35, baseFrequency: 380, octaves: 3 } }).connect(out);
+    I.brass.maxPolyphony = 8; I.brass.volume.value = -16;
+    return I;
+  },
+  play(I, x) {
+    const { inBar, bar, step, c, d, time, has, tight, pilot, full, solo, soloStart } = x;
+    if (has("drums")) {
+      if (inBar % 4 === 0 && (tight || inBar % 8 === 0)) I.kick.triggerAttackRelease("A0", "8n", time, 1);
+      if (tight ? (inBar === 4 || inBar === 12) : inBar === 8) { I.snare.triggerAttackRelease(0.24, time, tight ? 1 : 0.7); I.snBody.triggerAttackRelease("A2", "16n", time, 0.8); }
+      if (tight && (pilot ? true : inBar % 2 === 0)) I.hat.triggerAttackRelease("32n", time, inBar % 4 === 2 ? 0.8 : 0.45);
+    }
+    if (has("bass")) {
+      const r = c.bass[0], o = c.bass[1];
+      if (pilot) I.bass.triggerAttackRelease(inBar % 4 === 3 ? o : r, d * 0.8, time, inBar % 4 === 0 ? 1 : 0.7);
+      else if (tight) { if (inBar % 2 === 0) I.bass.triggerAttackRelease(inBar % 4 === 2 ? o : r, d * 1.6, time, 0.85); }
+      else if (inBar % 4 === 0) I.bass.triggerAttackRelease(r, d * 3.5, time, 0.8);
+    }
+    if (has("arp")) {
+      const tones = [...c.arp, ...c.arp.map(up12)];
+      if (tight) I.arp.triggerAttackRelease(tones[SW_ARP[inBar] + (inBar >= 8 ? 4 : 0)], d * 0.8, time, inBar % 4 === 0 ? 0.9 : 0.6);
+      else if (inBar % 2 === 0) I.arp.triggerAttackRelease(c.arp[(inBar / 2) % 4], d * 1.5, time, 0.6);
+    }
+    if (has("pads") && inBar === 0) I.pads.triggerAttackRelease(c.pad, d * 15.5, time, tight ? 0.7 : 0.5);
+    if (has("vox") && !solo) {
+      const v = SW_VOX.get(step);
+      if (v && (full || (pilot && step >= 64) || step === 8 || step === 72)) I.vox.triggerAttackRelease(v[1], v[2] * d * 0.95, time, full ? 0.9 : 0.7);
+    }
+    if (has("lead") && !solo) {
+      const v = SW_LEAD.get(step), answer = bar % 4 === 3;
+      if (v && (answer || (tight && !full))) I.lead.triggerAttackRelease(v[1], v[2] * d * 0.95, time, 0.8);
+    }
+    if (has("brass")) {
+      const hit = inBar === 0 || (tight && (inBar === 6 || inBar === 10));
+      if (hit) I.brass.triggerAttackRelease(c.pad.map(up12), inBar === 0 ? d * 3 : d * 1.5, time, inBar === 0 ? 0.9 : 0.75);
+    }
+    if (soloStart && !(has("drums") && tight)) I.snare.triggerAttackRelease(0.3, time, 1);
+  },
+});
+
+// ---------------- Orchestral ----------------
+const OR_SOP = melody([
+  [0,"E5",8],[8,"A5",8],[16,"A5",4],[20,"G5",4],[24,"F5",8],
+  [32,"E5",4],[36,"G5",4],[40,"C6",8],[48,"B5",8],[56,"G5",8],
+  [64,"A5",12],[76,"B5",4],[80,"C6",8],[88,"A5",8],
+  [96,"G5",4],[100,"E5",4],[104,"C6",8],[112,"B5",8],[120,"G5",4],[124,"E5",4],
+]);
+const OR_VLN = melody([
+  [0,"A4",2],[2,"C5",2],[4,"E5",2],[6,"A5",2],[8,"G5",4],[12,"E5",4],
+  [16,"F5",2],[18,"A5",2],[20,"C6",4],[24,"A5",4],[28,"F5",4],
+  [32,"G5",2],[34,"E5",2],[36,"C5",2],[38,"E5",2],[40,"G5",4],[44,"C6",4],
+  [48,"B5",4],[52,"A5",2],[54,"G5",2],[56,"D5",8],
+]);
+const CELLO = { Am: ["A2","C3"], F: ["F2","A2"], C: ["C3","E3"], G: ["G2","B2"] };
+defineSet({
+  id: "or", name: "Orchestral", color: "#f2c46d", key: "O",
+  loose: "Loose: an orchestra tuning up in the distance", tight: "Locked in: the full orchestra plays as one",
+  pieces: [
+    { id: "or-greaves",   body: "legs",  covers: ["perc"],    item: "Marching Greaves",   member: "Percussion",  adds: "march drums and cymbals" },
+    { id: "or-sash",      body: "waist", covers: ["timp"],    item: "Timpani Sash",       member: "Timpanist",   adds: "timpani" },
+    { id: "or-vambraces", body: "arms",  covers: ["strings"], item: "Spiccato Vambraces", member: "String section", adds: "spiccato strings" },
+    { id: "or-mantle",    body: "back",  covers: ["horns"],   item: "Horn Mantle",        member: "Horn section", adds: "French horns" },
+    { id: "or-crown",     body: "head",  covers: ["soprano"], item: "Maestro Crown",      member: "Soprano",     adds: "soprano “ah”" },
+    { id: "or-greatbow",  hands: 2, covers: ["violin", "cello"], item: "Virtuoso Greatbow", member: "Solo violin + cello", adds: "violin melody and cello line", note: "Two-handed · counts as 2" },
+    { id: "or-rapier",    hands: 1, covers: ["violin"], item: "Violin Rapier", member: "Solo violin", adds: "violin melody", note: "One-handed" },
+    { id: "or-saber",     hands: 1, covers: ["cello"],  item: "Cello Saber",   member: "Solo cello",  adds: "cello line",    note: "One-handed" },
+  ],
+  wpn: {
+    "or-greatbow": '<path d="M-6 -30 Q46 10 -6 50" fill="none"/><rect x="-8" y="-2" width="112" height="3" rx="1"/><polygon points="100,-6 122,0 100,6"/>',
+    "or-rapier":   '<circle cx="0" cy="2" r="5"/><rect x="-1" y="6" width="2" height="60" rx="1"/>',
+    "or-saber":    '<rect x="-7" y="0" width="14" height="4" rx="1"/><path d="M0 4 Q10 30 2 58" fill="none"/>',
+  },
+  special: {
+    name: "Grand Finale", duel: "Virtuoso duet", two: "or-greatbow", pair: ["or-rapier", "or-saber"], duelOffset: -12,
+    voice:  { osc: "sawtooth", lp: 4800, delay: "16n", wet: 0.12, vibF: 6, vibD: 0.05, env: { attack: 0.01, decay: 0.1, sustain: 0.75, release: 0.08 }, vol: -10 },
+    voiceB: { osc: "sawtooth", lp: 2400, delay: "16n", wet: 0.12, vibF: 5.2, vibD: 0.05, env: { attack: 0.015, decay: 0.1, sustain: 0.8, release: 0.1 }, vol: -8 },
+    // A caprice: broken thirds, string-crossing arpeggios, a falling scale, a trill, a climb
+    line(sb, c) {
+      const root = mid(c.arp[0]), tri = triOf(c), out = [];
+      for (let i = 0; i < 32; i++) {
+        if (sb === 0) { const b = idxOf(root) + Math.floor(i / 2); out.push(sc(i % 2 ? b + 2 : b)); }
+        else if (sb === 1) { const t = [tri[0], tri[2], tri[1] + 12, tri[2] + 12]; out.push(t[[0,1,2,3,2,1][i % 6]] + (i >= 16 ? 12 : 0)); }
+        else if (sb === 2) out.push(sc(idxOf(root + 24) - i));
+        else if (sb === 3) { const top = idxOf(tri[2] + 12); out.push(sc(i % 2 ? top + 1 : top)); }
+        else out.push(sc(idxOf(root) + Math.floor(i * 14 / 31)));
+      }
+      return { notes: out, sub: 2 };
+    },
+  },
+  build(out) {
+    const I = {};
+    I.bd = new Tone.MembraneSynth({ pitchDecay: 0.1, octaves: 2, envelope: { attack: 0.002, decay: 0.9, sustain: 0 } }).connect(out);
+    I.snare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.11, sustain: 0 } }).connect(new Tone.Filter({ type: "bandpass", frequency: 3200, Q: 0.8 }).connect(out));
+    I.snare.volume.value = -6;
+    I.cym = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.003, decay: 2.2, sustain: 0 } }).connect(new Tone.Filter({ type: "highpass", frequency: 5500 }).connect(out));
+    I.cym.volume.value = -12;
+    I.timp = new Tone.MembraneSynth({ pitchDecay: 0.04, octaves: 1.2, envelope: { attack: 0.002, decay: 1.4, sustain: 0 } }).connect(out);
+    I.timp.volume.value = -2;
+    I.str = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 3, spread: 20 }, envelope: { attack: 0.005, decay: 0.09, sustain: 0.1, release: 0.08 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 3000 }).connect(out));
+    I.str.maxPolyphony = 6; I.str.volume.value = -12;
+    I.horns = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 10 }, envelope: { attack: 0.15, decay: 0.3, sustain: 0.8, release: 0.6 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 1100 }).connect(out));
+    I.horns.maxPolyphony = 8; I.horns.volume.value = -8;
+    const sopIn = new Tone.Vibrato(5.6, 0.12);
+    I.sopF = mkFormant(sopIn, VOWEL.sop, new Tone.Gain(4).connect(new Tone.FeedbackDelay({ delayTime: "4n", feedback: 0.2, wet: 0.18 }).connect(out)));
+    I.sop = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 2, spread: 8 }, envelope: { attack: 0.12, decay: 0.2, sustain: 0.85, release: 0.5 }, portamento: 0.05 }).connect(sopIn);
+    I.vln = new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.08, decay: 0.1, sustain: 0.8, release: 0.2 }, portamento: 0.02 })
+      .connect(new Tone.Filter({ type: "lowpass", frequency: 3800 }).connect(new Tone.Vibrato(5.8, 0.06).connect(out)));
+    I.vln.volume.value = -13;
+    I.cello = new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.12, decay: 0.2, sustain: 0.85, release: 0.3 } })
+      .connect(new Tone.Filter({ type: "lowpass", frequency: 1500 }).connect(new Tone.Vibrato(5, 0.05).connect(out)));
+    I.cello.volume.value = -8;
+    return I;
+  },
+  play(I, x) {
+    const { inBar, bar, step, c, d, time, has, tight, pilot, full, solo, soloStart } = x;
+    if (has("perc")) {
+      if (inBar === 0 || (tight && inBar === 8)) I.bd.triggerAttackRelease("C1", "4n", time, inBar === 0 ? 1 : 0.7);
+      if (tight && [4, 6, 7, 12, 14, 15].includes(inBar)) I.snare.triggerAttackRelease("32n", time, [7, 15].includes(inBar) ? 0.5 : 0.85);
+      if (pilot && bar % 4 === 3 && inBar >= 12) I.snare.triggerAttackRelease("32n", time + d / 2, 0.6);
+      if (inBar === 0 && (bar % 4 === 0 || soloStart) && (tight || soloStart)) I.cym.triggerAttackRelease("1n", time, 1);
+    }
+    if (has("timp")) {
+      const n = up12(c.bass[0]);
+      if (inBar === 0) I.timp.triggerAttackRelease(n, "2n", time, 1);
+      if (tight && inBar === 8) I.timp.triggerAttackRelease(up12(c.bass[2]), "4n", time, 0.8);
+      if (tight && bar % 4 === 3 && inBar >= 12) { I.timp.triggerAttackRelease(n, "32n", time, 0.5 + (inBar - 12) * 0.12); }
+    }
+    if (has("strings")) {
+      const t = [c.pad[0], c.pad[1], c.pad[2], c.pad[1]];
+      if (tight || inBar % 2 === 0) I.str.triggerAttackRelease(t[(tight ? inBar : inBar / 2) % 4], d * 0.6, time, inBar % 4 === 0 ? 0.9 : 0.6);
+    }
+    if (has("horns")) {
+      if (tight) { if (inBar === 0) I.horns.triggerAttackRelease(c.pad, d * 5.5, time, 0.85); else if (inBar === 6) I.horns.triggerAttackRelease(c.pad, d * 1.8, time, 0.7); else if (inBar === 8) I.horns.triggerAttackRelease(c.pad, d * 7.5, time, 0.8); }
+      else if (inBar === 0) I.horns.triggerAttackRelease(c.pad, d * 15, time, 0.6);
+    }
+    if (has("soprano") && !solo) {
+      const v = OR_SOP.get(step);
+      if (v && (full || (pilot && step >= 64) || step === 64 || step === 104)) I.sop.triggerAttackRelease(v[1], v[2] * d * 0.95, time, full ? 0.9 : 0.7);
+    }
+    if (has("violin") && !solo) {
+      const v = OR_VLN.get(step % 64);
+      if (v && (bar % 4 === 3 || (tight && !full))) I.vln.triggerAttackRelease(v[1], v[2] * d * 0.95, time, 0.8);
+    }
+    if (has("cello") && !solo) {
+      const ce = CELLO[c.name];
+      if (inBar === 0) I.cello.triggerAttackRelease(ce[0], d * (tight ? 7.5 : 15.5), time, 0.8);
+      else if (tight && inBar === 8) I.cello.triggerAttackRelease(ce[1], d * 7.5, time, 0.75);
+    }
+  },
+});
+
+// Where each power-up and set piece mounts on the Amp Rig
+const MOUNT = {
+  beat: { parts: ["footR","footL","thighR","thighL"], label: "Legs" },
+  flute: { parts: [], label: "Hand (2 weapon slots)" },
+  drop: { parts: [], label: "Hand (2 weapon slots)" },
+  taiko: { parts: [], label: "Hand (2 weapon slots)" },
+  arp: { parts: ["core"], label: "Chest core (1 rune slot)" },
+  pads: { parts: ["foreL","shield"], label: "Left forearm (1 shield slot)" },
+  funk: { parts: [], label: "Hand (2 weapon slots)" },
+  choir: { parts: [], label: "Shoulder speaker (2 charm slots)" },
+  strings: { parts: [], label: "Hand (2 weapon slots)" },
+  rock: { parts: ["visor"], label: "Cockpit" },
+};
+// Slot limits that match the Rig's body. Picking into a full slot swaps out the oldest item there.
+const SLOTS = {
+  hands:    { cap: 2, label: "Hands", what: "weapons" },
+  speakers: { cap: 2, label: "Shoulder speakers", what: "charms" },
+  core:     { cap: 1, label: "Chest core", what: "runes" },
+  forearm:  { cap: 1, label: "Left forearm", what: "shields" },
+};
+const SLOT_OF = { flute: "hands", drop: "hands", taiko: "hands", funk: "hands", strings: "hands", choir: "speakers", arp: "core", pads: "forearm" };
+const LOCKED = [
+  ["Back mount", "shoulder launchers, mounted weapons"],
+  ["Belt sockets", "extra charms"],
+  ["Aux core bay", "extra cores"],
+  ["Leg hardpoints", "platforms"],
+];
+const WPN = {
+  flute:   '<rect x="-8" y="0" width="16" height="4" rx="1"/><polygon points="-2,4 2,4 2,56 0,64 -2,56"/>',
+  drop:    '<rect x="-2" y="2" width="4" height="62" rx="2"/>',
+  taiko:   '<rect x="-1.5" y="2" width="3" height="46" rx="1"/><rect x="-11" y="44" width="22" height="14" rx="2"/>',
+  funk:    '<polygon points="-6,2 -2,2 -2,24 -4,30 -6,24"/><polygon points="2,2 6,2 6,24 4,30 2,24"/>',
+  strings: '<path d="M-2 -18 Q18 18 -2 54"/><line x1="-2" y1="-18" x2="-2" y2="54" stroke-width="1"/>',
+};
+
+const STEMS = [];
+let nodes = null;      // audio graph, built on first Play
+let counter = 0;
+
+function def(o) { STEMS.push(Object.assign({ wanted: false, dropped: false, gate: false, order: 0, state: "off" }, o)); }
+
+def({ id: "beat", key: "0", power: "Base beat", layer: "EDM kick and hi-hats", slot: "BEAT", color: "#ffd166", db: -2, send: 0, base: true,
+      fx: "Sets the attack tempo. On from the first second of a run." });
+def({ id: "flute", key: "1", power: "Sword", layer: "Flute melody", slot: "LEAD", color: "#7ef0c8", db: -9, send: .35,
+      fx: "Extra slash that fires homing notes." });
+def({ id: "drop", key: "2", power: "Plasma Blade", layer: "Dubstep wobble and half-time snare", slot: "DROP", color: "#b18cff", db: -10, send: .05,
+      fx: "Shockwave on every drop." });
+def({ id: "taiko", key: "3", power: "War Hammer", layer: "Taiko drums", slot: "PERC", color: "#ff9b54", db: -5, send: .25,
+      fx: "Ground slam on the downbeat." });
+def({ id: "arp", key: "4", power: "Lightning Rune", layer: "Synth arpeggio", slot: "ARP", color: "#3dd6ff", db: -17, send: .2, pump: true,
+      fx: "Chain lightning on every eighth note." });
+def({ id: "pads", key: "5", power: "Guardian Shield", layer: "Warm pad chords", slot: "PADS", color: "#8fb4ff", db: -17, send: .4, pump: true,
+      fx: "Damage shield that refreshes each bar." });
+def({ id: "funk", key: "6", power: "Twin Daggers", layer: "Funk bass", slot: "BASS", color: "#ff6fd8", db: -11, send: 0, pump: true,
+      fx: "Fast double hits." });
+def({ id: "choir", key: "7", power: "Heart Charm", layer: "Choir “ahh”", slot: "CHOIR", color: "#ffe3a3", db: -12, send: .5, pump: true,
+      fx: "Healing over time." });
+def({ id: "strings", key: "8", power: "Comet Bow", layer: "String ostinato", slot: "STRINGS", color: "#c3f06b", db: -18, send: .3, pump: true,
+      fx: "Piercing arrows." });
+def({ id: "rock", key: "P", power: "Pilot mode", layer: "Rock drum kit", slot: "PILOT", color: "#ff5c8a", db: -4, send: .12, pilot: true,
+      fx: "Plays while you hold manual control." });
+
+const byId = id => STEMS.find(s => s.id === id);
+const layers = () => STEMS.filter(s => !s.base && !s.pilot);
+
+// ---------- Audio graph ----------
+function build() {
+  const master = new Tone.Volume(+document.getElementById("master").value);
+  const comp = new Tone.Compressor({ threshold: -16, ratio: 3, attack: 0.01, release: 0.2 });
+  const limiter = new Tone.Limiter(-1);
+  const meter = new Tone.Meter({ smoothing: 0.6 });
+  const slowLP = new Tone.Filter({ type: "lowpass", frequency: 20000, rolloff: -24 });
+  master.chain(slowLP, comp, limiter, Tone.Destination);
+  limiter.connect(meter);
+  const reverb = new Tone.Reverb({ decay: 2.8, preDelay: 0.02, wet: 1 }).connect(master);
+  const duckBus = new Tone.Gain(1).connect(master);   // other layers duck under the full-set bonus
+  const beatBus = new Tone.Gain(1).connect(master);   // EDM beat steps aside for the full-set bonus
+  const pumpBus = new Tone.Gain(1).connect(duckBus);
+
+  for (const s of STEMS) {
+    s.fader = new Tone.Gain(s.wanted ? 1 : 0);
+    s.vol = new Tone.Volume(s.db);
+    s.fader.connect(s.vol);
+    s.vol.connect(s.pump ? pumpBus : s.base ? beatBus : s.pilot ? master : duckBus);
+    if (s.send) { s.sendG = new Tone.Gain(s.send); s.vol.connect(s.sendG); s.sendG.connect(reverb); }
+    s.gate = s.wanted;
+  }
+  const F = id => byId(id).fader;
+  const n = { master, meter, reverb, pumpBus, duckBus, beatBus, slowLP };
+  // Shred special: riser for the slow-motion windup, two solo guitars for the solo or the duel
+  const riserBP = new Tone.Filter({ type: "bandpass", frequency: 400, Q: 2 }).connect(comp);
+  n.riserBP = riserBP;
+  n.riser = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 1, decay: 0.05, sustain: 1, release: 0.1 } }).connect(riserBP);
+  n.riser.volume.value = -14;
+  // Gear sets: one bus per set (cohesion gain + muffle filter), instruments built by each set
+  for (const id in SETS) {
+    const bus = new Tone.Gain(0.45), lp = new Tone.Filter({ type: "lowpass", frequency: 2600, rolloff: -12 });
+    bus.chain(lp, new Tone.Volume(-4), master);
+    const I = SETS[id].build(bus);
+    I.solo = [mkVoice(master, SETS[id].special.voice), mkVoice(master, SETS[id].special.voiceB)];
+    RT[id] = { bus, lp, I };
+  }
+
+  // Base beat
+  n.kick = new Tone.MembraneSynth({ pitchDecay: 0.03, octaves: 6, oscillator: { type: "sine" }, envelope: { attack: 0.001, decay: 0.38, sustain: 0, release: 0.05 } }).connect(F("beat"));
+  const hatHP = new Tone.Filter({ type: "highpass", frequency: 8000 }).connect(F("beat"));
+  n.hat = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.035, sustain: 0 } }).connect(hatHP);
+  n.ohat = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.002, decay: 0.16, sustain: 0 } }).connect(hatHP);
+  n.hat.volume.value = -8; n.ohat.volume.value = -9;
+
+  // Flute (Sword)
+  const vib = new Tone.Vibrato(5.2, 0.07).connect(F("flute"));
+  n.flute = new Tone.Synth({ oscillator: { type: "custom", partials: [1, 0.32, 0.12, 0.05, 0.02] }, envelope: { attack: 0.04, decay: 0.15, sustain: 0.75, release: 0.18 }, portamento: 0.012 }).connect(vib);
+  const breathBP = new Tone.Filter({ type: "bandpass", frequency: 2400, Q: 1.1 }).connect(F("flute"));
+  n.breath = new Tone.NoiseSynth({ noise: { type: "pink" }, envelope: { attack: 0.005, decay: 0.09, sustain: 0.05, release: 0.05 } }).connect(breathBP);
+  n.breath.volume.value = -20;
+
+  // Dubstep drop (Plasma Blade)
+  n.wobF = new Tone.Filter({ type: "lowpass", frequency: 200, Q: 7, rolloff: -24 });
+  const dist = new Tone.Distortion(0.45);
+  n.wobF.chain(dist, F("drop"));
+  n.wob = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 3, spread: 28 }, envelope: { attack: 0.005, decay: 0.05, sustain: 1, release: 0.06 } }).connect(n.wobF);
+  n.wob.volume.value = -4;
+  n.sub = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.005, decay: 0.05, sustain: 1, release: 0.06 } }).connect(F("drop"));
+  n.sub.volume.value = -5;
+  const snHP = new Tone.Filter({ type: "highpass", frequency: 900 }).connect(F("drop"));
+  n.dsnare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.22, sustain: 0 } }).connect(snHP);
+  n.dsnBody = new Tone.MembraneSynth({ pitchDecay: 0.02, octaves: 2, envelope: { attack: 0.001, decay: 0.12, sustain: 0 } }).connect(F("drop"));
+  n.dsnBody.volume.value = -4;
+
+  // Taiko (War Hammer)
+  n.taiko = new Tone.MembraneSynth({ pitchDecay: 0.08, octaves: 2.5, envelope: { attack: 0.002, decay: 0.7, sustain: 0, release: 0.3 } }).connect(F("taiko"));
+  n.rim = new Tone.MembraneSynth({ pitchDecay: 0.01, octaves: 1.5, envelope: { attack: 0.001, decay: 0.08, sustain: 0 } }).connect(F("taiko"));
+  n.rim.volume.value = -10;
+
+  // Arp (Lightning Rune)
+  const arpDelay = new Tone.FeedbackDelay({ delayTime: "8n.", feedback: 0.28, wet: 0.22 }).connect(F("arp"));
+  n.arp = new Tone.MonoSynth({ oscillator: { type: "sawtooth" }, filter: { Q: 3, type: "lowpass", rolloff: -24 },
+    envelope: { attack: 0.002, decay: 0.14, sustain: 0.15, release: 0.08 },
+    filterEnvelope: { attack: 0.001, decay: 0.12, sustain: 0.1, baseFrequency: 700, octaves: 3 } }).connect(arpDelay);
+
+  // Pads (Guardian Shield)
+  const padLP = new Tone.Filter({ type: "lowpass", frequency: 1500 }).connect(F("pads"));
+  n.pads = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 3, spread: 30 }, envelope: { attack: 0.3, decay: 0.3, sustain: 0.8, release: 1.2 } }).connect(padLP);
+  n.pads.maxPolyphony = 12;
+
+  // Funk bass (Twin Daggers)
+  n.funk = new Tone.MonoSynth({ oscillator: { type: "sawtooth" }, filter: { Q: 2, type: "lowpass", rolloff: -24 },
+    envelope: { attack: 0.003, decay: 0.22, sustain: 0.35, release: 0.06 },
+    filterEnvelope: { attack: 0.002, decay: 0.14, sustain: 0.25, baseFrequency: 160, octaves: 3.6 } }).connect(F("funk"));
+
+  // Choir (Heart Charm): saw voices through "ah" formant filters
+  const formSum = new Tone.Gain(3.2).connect(F("choir"));
+  const voxVib = new Tone.Vibrato(4.6, 0.05);
+  [[800, 6, 1], [1150, 7, 0.55], [2900, 9, 0.22]].forEach(([f, q, g]) => {
+    const bp = new Tone.Filter({ type: "bandpass", frequency: f, Q: q });
+    const gg = new Tone.Gain(g);
+    voxVib.connect(bp); bp.connect(gg); gg.connect(formSum);
+  });
+  n.choir = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 14 }, envelope: { attack: 0.45, decay: 0.2, sustain: 0.9, release: 1.4 } }).connect(voxVib);
+  n.choir.maxPolyphony = 10;
+
+  // Strings (Comet Bow)
+  const strLP = new Tone.Filter({ type: "lowpass", frequency: 2600 }).connect(F("strings"));
+  n.str = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 3, spread: 18 }, envelope: { attack: 0.012, decay: 0.16, sustain: 0.35, release: 0.14 } }).connect(strLP);
+  n.str.maxPolyphony = 6;
+
+  // Rock kit (Pilot)
+  n.rkick = new Tone.MembraneSynth({ pitchDecay: 0.025, octaves: 4, envelope: { attack: 0.001, decay: 0.26, sustain: 0 } }).connect(F("rock"));
+  const rsHP = new Tone.Filter({ type: "highpass", frequency: 1400 }).connect(F("rock"));
+  n.rsnare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.17, sustain: 0 } }).connect(rsHP);
+  n.rsnBody = new Tone.MembraneSynth({ pitchDecay: 0.015, octaves: 1.5, envelope: { attack: 0.001, decay: 0.1, sustain: 0 } }).connect(F("rock"));
+  n.rsnBody.volume.value = -3;
+  const rhHP = new Tone.Filter({ type: "highpass", frequency: 9000 }).connect(F("rock"));
+  n.rhat = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.045, sustain: 0 } }).connect(rhHP);
+  n.rhat.volume.value = -6;
+  const crHP = new Tone.Filter({ type: "highpass", frequency: 4500 }).connect(F("rock"));
+  n.crash = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.002, decay: 1.6, sustain: 0 } }).connect(crHP);
+  n.crash.volume.value = -9;
+
+  // Hit sound effect (not a layer)
+  const hitBP = new Tone.Filter({ type: "bandpass", frequency: 1800, Q: 0.8 }).connect(master);
+  n.hitfx = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.001, decay: 0.25, sustain: 0 } }).connect(hitBP);
+  n.hitfx.volume.value = -6;
+
+  n.loop = new Tone.Loop(tick, "16n").start(0);
+  return n;
+}
+
+// ---------- Sequencer: one 16th-note clock drives every stem ----------
+let pilotCrash = false;
+let recoverBar = -1;
+
+function tick(time) {
+  const ticks = Tone.Transport.getTicksAtTime(time);
+  const abs = Math.round(ticks / (Tone.Transport.PPQ / 4));
+  const step = abs % STEPS;
+  const absBar = Math.floor(abs / BAR);
+  const inBar = step % BAR;
+  const bar = Math.floor(step / BAR);
+  const c = chordAt(step);
+  const d = s16();
+  const n = nodes;
+
+  // Dropout recovery lands exactly on a bar line
+  if (inBar === 0 && recoverBar >= 0 && absBar >= recoverBar) { recoverAll(time); }
+
+  // Gear changes, set bonuses and specials land on bar lines
+  if (inBar === 0) {
+    pilotNow = byId("rock").wanted;
+    for (const id in SETS) setNow[id] = membersOf(id);
+    specialBarLine(time, absBar);
+    const full = Object.keys(SETS).find(id => setNow[id].size === SET_SIZE && pilotNow) || null;
+    if (full !== fullSet) { fullSet = full; if (full) setEntry = true; }
+    const loudSet = full || (specialPhase === "solo" ? specialSet : null);
+    if (!!loudSet !== mixLoud) {
+      mixLoud = !!loudSet;
+      ramp(n.duckBus.gain, mixLoud ? 0.32 : 1, time, mixLoud ? 0.03 : 0.25, time);
+      ramp(n.beatBus.gain, mixLoud ? 0 : 1, time, mixLoud ? 0.03 : 0.25, time);
+    }
+    // Set cohesion: more pieces of the same set = louder, brighter, tighter
+    for (const id in SETS) {
+      const r = RT[id], coh = setNow[id].size / SET_SIZE, loud = id === loudSet;
+      let g = loud ? 1.7 : pilotNow ? 0.85 + 0.15 * coh : 0.6 + 0.25 * coh;
+      if (loudSet && !loud) g *= 0.35;
+      const lp = loud ? 16000 : pilotNow ? 9000 : 1800 + 3200 * coh;
+      ramp(r.bus.gain, g, time, 0.03, time);
+      r.lp.frequency.cancelScheduledValues(time); r.lp.frequency.setValueAtTime(r.lp.frequency.getValueAtTime(time), time); r.lp.frequency.exponentialRampToValueAtTime(lp, time + 0.05);
+    }
+    Tone.Draw.schedule(renderGear, time);
+  }
+
+  // Sidechain pump
+  if (inBar % 4 === 0 && document.getElementById("pump").checked) {
+    const p = n.pumpBus.gain; const b = beatSec();
+    p.setValueAtTime(1, time); p.linearRampToValueAtTime(0.42, time + 0.012); p.linearRampToValueAtTime(1, time + b * 0.62);
+  }
+
+  const on = id => byId(id).gate;
+
+  if (on("beat")) {
+    if (inBar % 4 === 0) n.kick.triggerAttackRelease("C1", "8n", time, 1);
+    if (inBar % 4 === 2) n.ohat.triggerAttackRelease("16n", time, 0.6);
+    else n.hat.triggerAttackRelease("32n", time, inBar % 2 ? 0.35 : 0.55);
+  }
+  if (on("flute")) {
+    const m = MEL.get(step);
+    if (m) { n.flute.triggerAttackRelease(m[1], m[2] * d * 0.92, time, 0.85); n.breath.triggerAttackRelease(0.06, time, 0.8); }
+  }
+  if (on("drop")) {
+    if (inBar === 0) { n.wob.triggerAttackRelease(c.wob, d * 7.6, time); n.sub.triggerAttackRelease(c.wob, d * 7.6, time); }
+    if (inBar === 10) { n.wob.triggerAttackRelease(c.wob, d * 5.6, time); n.sub.triggerAttackRelease(c.wob, d * 5.6, time); }
+    if (inBar % 4 === 0) {
+      const rate = WOB_RATES[bar % 4][inBar / 4];
+      const f = n.wobF.frequency; const per = beatSec() / rate;
+      f.cancelScheduledValues(time); f.setValueAtTime(110, time);
+      for (let i = 0; i < rate; i++) { f.exponentialRampToValueAtTime(2400, time + per * (i + 0.5)); f.exponentialRampToValueAtTime(110, time + per * (i + 1)); }
+    }
+    if (inBar === 8) { n.dsnare.triggerAttackRelease("8n", time, 1); n.dsnBody.triggerAttackRelease("G2", "16n", time, 1); }
+  }
+  if (on("taiko")) {
+    const t = TAIKO.get(step % 32);
+    if (t) { if (t[1]) n.rim.triggerAttackRelease("E3", "32n", time, t[0]); else n.taiko.triggerAttackRelease("D2", "4n", time, t[0]); }
+  }
+  if (on("arp")) {
+    n.arp.triggerAttackRelease(c.arp[ARP_ORDER[inBar % 8]], d * 0.9, time, inBar % 4 === 0 ? 0.9 : 0.6);
+  }
+  if (on("pads") && inBar === 0) n.pads.triggerAttackRelease(c.pad, d * 15.5, time, 0.55);
+  if (on("funk")) {
+    const fb = FUNK.get(inBar);
+    if (fb) n.funk.triggerAttackRelease(c.bass[fb[0]], fb[1] * d * 0.85, time, fb[2]);
+  }
+  if (on("choir") && inBar === 0) n.choir.triggerAttackRelease(c.choir, d * 15.5, time, 0.6);
+  if (on("strings") && inBar % 2 === 0) n.str.triggerAttackRelease(c.str[(inBar / 2) % 4], d * 1.6, time, inBar % 8 === 0 ? 0.8 : 0.6);
+  // ---- Pilot rock kit ----
+  const lastBar = bar === 7;
+  const fill = lastBar && inBar >= 12;
+  if (on("rock")) {
+    if (!(pilotNow && setNow.pm && setNow.pm.has("drums")) && [0, 8, 10].includes(inBar)) n.rkick.triggerAttackRelease("E1", "8n", time, inBar === 10 ? 0.75 : 1);
+    if (fill) { n.rsnare.triggerAttackRelease("32n", time, 0.5 + (inBar - 12) * 0.15); n.rsnBody.triggerAttackRelease("D3", "32n", time, 0.6); }
+    else if (inBar === 4 || inBar === 12) { n.rsnare.triggerAttackRelease("16n", time, 1); n.rsnBody.triggerAttackRelease("D3", "16n", time, 1); }
+    if (inBar % 2 === 0 && !fill) {
+      const crashNow = inBar === 0 && (pilotCrash || setEntry || specialCrash || step === 0 || step === 64 || (fullSet && bar % 2 === 0));
+      if (crashNow) { n.crash.triggerAttackRelease("2n", time, 1); pilotCrash = false; setEntry = false; specialCrash = false; }
+      else n.rhat.triggerAttackRelease("32n", time, inBar % 4 === 0 ? 0.8 : 0.5);
+    }
+  }
+
+  // ---- Gear sets: every equipped piece plays its member ----
+  const soloSet = specialPhase === "solo" ? specialSet : null;
+  if (soloSet) playSolo(step, inBar, absBar, c, d, time);
+  for (const id in SETS) {
+    const m = setNow[id];
+    if (!m || !m.size) continue;
+    SETS[id].play(RT[id].I, { step, inBar, bar, absBar, c, d, time, has: q => m.has(q),
+      tight: pilotNow || m.size >= 4 || soloSet === id, pilot: pilotNow, full: fullSet === id,
+      solo: soloSet === id, soloStart: soloSet === id && absBar === specialBar && inBar === 0 });
+  }
+
+  Tone.Draw.schedule(() => drawClock(step), time);
+}
+
+// ---------- Shred special ----------
+// Press: on the next bar line time slows for one bar (tempo sags, the mix goes muffled, a riser builds).
+// Next bar: tempo snaps back, crash, the band goes full power, and a 5-bar shred solo + held note plays.
+// The player is invincible for 10 s from the first note. 30 s cooldown from the press.
+let windupEnd = 0;
+let specialPending = false, specialPhase = null, specialBar = -1, specialCrash = false, mixLoud = false;
+let specialSet = null;
+let specialMode = "solo";            // "solo" (two-handed weapon) or "duel" (two one-handed weapons)
+let cooldownUntil = 0, invulnUntil = 0;
+const COOLDOWN = 30000, INVULN = 10000;
+
+function readySet() {
+  return Object.keys(SETS).find(id => { const sp = SETS[id].special; return membersOf(id).size === SET_SIZE && (equipped.has(sp.two) || sp.pair.every(p => equipped.has(p))); }) || null;
+}
+const specialLabel = id => id ? (equipped.has(SETS[id].special.two) ? SETS[id].special.name : SETS[id].special.duel) : "Set special";
+function triggerSpecial() {
+  if (!playing || !nodes) { toast("Press Play first."); return; }
+  const id = readySet();
+  if (!id) { toast("A set special needs one full set: five armor pieces plus its weapons."); return; }
+  if (specialPending || specialPhase) return;
+  if (performance.now() < cooldownUntil) { toast(`Recharging: ${Math.ceil((cooldownUntil - performance.now()) / 1000)} s left.`); return; }
+  specialSet = id; specialMode = equipped.has(SETS[id].special.two) ? "solo" : "duel";
+  specialPending = true; cooldownUntil = performance.now() + COOLDOWN;
+  toast(`${specialLabel(id)}: time slows on the next bar.`);
+}
+function specialBarLine(time, absBar) {
+  const n = nodes, base = +document.getElementById("tempo").value, bar = Tone.Time("1m").toSeconds();
+  if (specialPending && !specialPhase) {
+    specialPending = false; specialPhase = "windup"; specialBar = absBar;
+    // Linear tempo sag from base to 55% that lasts exactly one bar (4 beats), so the next bar line stays predictable
+    const T = 480 / (base * 1.55);
+    Tone.Transport.bpm.setValueAtTime(base, time);
+    Tone.Transport.bpm.linearRampToValueAtTime(base * 0.55, time + T);
+    windupEnd = time + T;
+    n.slowLP.frequency.cancelScheduledValues(time); n.slowLP.frequency.setValueAtTime(20000, time); n.slowLP.frequency.exponentialRampToValueAtTime(500, time + bar * 1.2);
+    n.riser.envelope.attack = bar * 1.3;
+    n.riser.triggerAttackRelease(bar * 1.35, time, 0.9);
+    n.riserBP.frequency.cancelScheduledValues(time); n.riserBP.frequency.setValueAtTime(300, time); n.riserBP.frequency.exponentialRampToValueAtTime(7000, time + bar * 1.35);
+    Tone.Draw.schedule(() => { document.querySelector(".stage-wrap").classList.add("slowmo"); renderSpecial(); }, time);
+  } else if (specialPhase === "windup" && absBar > specialBar) {
+    specialPhase = "solo"; specialBar = absBar; specialCrash = true;
+    Tone.Transport.bpm.setValueAtTime(base, Math.max(time, windupEnd + 0.0005));
+    n.slowLP.frequency.cancelScheduledValues(time); n.slowLP.frequency.setValueAtTime(20000, time);
+    const duel = specialMode === "duel", V = RT[specialSet].I.solo;
+    V[0].pan.pan.setValueAtTime(duel ? -0.65 : 0, time); V[1].pan.pan.setValueAtTime(duel ? 0.65 : 0, time);
+    Tone.Draw.schedule(() => {
+      const w = document.querySelector(".stage-wrap"); w.classList.remove("slowmo"); w.classList.add("shred");
+      invulnUntil = performance.now() + INVULN; render(); renderSpecial();
+    }, time);
+  } else if (specialPhase === "solo" && absBar >= specialBar + 6) {
+    specialPhase = null;
+    Tone.Draw.schedule(() => { document.querySelector(".stage-wrap").classList.remove("shred"); render(); renderSpecial(); }, time);
+  }
+}
+// Plays the active set's special: 5 bars of phrases from its line(), then a held note with wide vibrato.
+// Duel: call and answer panned left/right, trading faster each bar, then both in harmony.
+function playSolo(step, inBar, absBar, c, d, time) {
+  const sb = absBar - specialBar, sp = SETS[specialSet].special, [A, B] = RT[specialSet].I.solo, off = sp.duelOffset || 0;
+  if (sb >= 5) {
+    if (inBar === 0) {
+      const top = mid(c.arp[0]) + 24;
+      A.vib.depth.setValueAtTime(0.12, time); B.vib.depth.setValueAtTime(0.12, time);
+      A.syn.triggerAttackRelease(Tone.Frequency(top, "midi"), d * 15, time, 1);
+      if (specialMode === "duel") B.syn.triggerAttackRelease(Tone.Frequency(sc(idxOf(top) + 2) + off, "midi"), d * 15, time, 0.9);
+    }
+    return;
+  }
+  if (inBar === 0) { A.vib.depth.setValueAtTime(sp.voice.vibD || 0.03, time); B.vib.depth.setValueAtTime(sp.voiceB.vibD || 0.03, time); }
+  const { notes, sub } = sp.line(sb, c), len = d / sub;
+  const play = (g, m, k) => g.syn.triggerAttackRelease(Tone.Frequency(m, "midi"), len * 0.9, time + k * len, k ? 0.8 : 0.95);
+  for (let k = 0; k < sub; k++) {
+    const m = notes[inBar * sub + k];
+    if (specialMode === "solo") { play(A, m, k); continue; }
+    let who;
+    if (sb === 0) who = "A"; else if (sb === 1) who = "B";
+    else if (sb === 2) who = inBar < 8 ? "A" : "B";
+    else if (sb === 3) who = Math.floor(inBar / 4) % 2 ? "B" : "A";
+    else who = "both";
+    if (who === "A" || who === "both") play(A, m, k);
+    if (who === "B") play(B, m + off, k);
+    if (who === "both") play(B, sc(idxOf(m) + 2) + off, k);
+  }
+}
+function renderSpecial() {
+  const btn = document.getElementById("specialBtn"), pill = document.getElementById("powerPill");
+  const rid = specialPhase ? specialSet : readySet(), ready = !!rid, now = performance.now(), cd = cooldownUntil - now;
+  btn.disabled = !ready;
+  btn.classList.toggle("live", !!specialPhase);
+  const label = specialLabel(rid);
+  btn.innerHTML = (!ready ? `${label} · needs full set` : specialPhase === "windup" ? "Time slowing…" : specialPhase === "solo" ? `${label}!` : cd > 0 ? `Recharging ${Math.ceil(cd / 1000)} s` : `${label} ready`) + " <kbd>X</kbd>";
+  const inv = invulnUntil - now;
+  if (inv > 0) { pill.textContent = `Invincible ${(inv / 1000).toFixed(1)} s`; pill.classList.add("invuln"); }
+  else pill.classList.remove("invuln");
+}
+setInterval(() => { if (invulnUntil - performance.now() > -300 || cooldownUntil > performance.now() - 300) { renderSpecial(); if (invulnUntil - performance.now() <= 0 && document.getElementById("powerPill").textContent.startsWith("Invincible")) render(); } }, 100);
+
+// ---------- Transitions ----------
+const qVal = () => document.getElementById("quant").value;
+function nextLine(q) {
+  const t = Tone.Transport.nextSubdivision(q || qVal());
+  return Math.max(t, Tone.now() + 0.01);
+}
+function exitLen() { const v = document.getElementById("exit").value; return isNaN(+v) ? Tone.Time(v).toSeconds() : +v; }
+
+function ramp(param, target, start, dur, nowArg) {
+  const now = nowArg !== undefined ? nowArg : Tone.now();
+  param.cancelAndHoldAtTime(now);
+  param.setValueAtTime(param.getValueAtTime(Math.max(start, now)), Math.max(start, now));
+  param.linearRampToValueAtTime(target, Math.max(start, now) + Math.max(dur, 0.005));
+}
+function enterAt(s, t) {
+  const style = document.getElementById("entry").value;
+  const now = Tone.now();
+  if (style === "swell" && t - now > 0.08) ramp(s.fader.gain, 1, now, t - now);
+  else if (style === "fade") ramp(s.fader.gain, 1, t, Tone.Time("1m").toSeconds());
+  else ramp(s.fader.gain, 1, t, 0.012);
+}
+function leaveAt(s, t, len) {
+  ramp(s.fader.gain, 0, t, len);
+  const myOrder = s.order;
+  Tone.Draw.schedule(() => { if (!s.wanted && !s.dropped && s.order === myOrder) { s.gate = false; } }, t + len + 0.05);
+}
+function setState(s, st, at) {
+  if (at === undefined || !playing) { s.state = st; render(); return; }
+  Tone.Draw.schedule(() => { s.state = st; render(); }, at);
+}
+
+// Hands are one pool shared by run weapons (power-ups) and set weapons (gear)
+function handItems() {
+  const items = STEMS.filter(x => SLOT_OF[x.id] === "hands" && x.wanted).map(x => ({ kind: "stem", ref: x, order: x.order, hands: 1, name: x.power }));
+  for (const id of equipped) { const pc = pieceById(id); if (pc.hands) items.push({ kind: "gear", id, order: gearOrder[id], hands: pc.hands, name: pc.item }); }
+  return items.sort((a, b) => a.order - b.order);
+}
+const handsUsed = () => handItems().reduce((t, i) => t + i.hands, 0);
+function handTaken(h) {
+  return STEMS.some(x => x.wanted && x.hand === h && SLOT_OF[x.id] === "hands") || [...equipped].some(id => (gearHand[id] || []).includes(h));
+}
+function freeHands(need, forName) {
+  const out = [];
+  while (handsUsed() + need > 2) {
+    const old = handItems()[0];
+    if (!old) break;
+    if (old.kind === "stem") toggle(old.ref); else { equipped.delete(old.id); delete gearHand[old.id]; }
+    out.push(old.name);
+  }
+  if (out.length) toast(`Hands full: ${forName} replaces ${out.join(" and ")}${playing ? " on the next bar" : ""}.`);
+}
+function equipPiece(id) {
+  const pc = pieceById(id);
+  if (equipped.has(id)) { equipped.delete(id); delete gearHand[id]; return; }
+  if (pc.body) {
+    // one armor piece per body slot, whichever set it comes from
+    for (const other of [...equipped]) if (PIECE[other].body === pc.body) { equipped.delete(other); toast(`${BODY[pc.body].label}: ${pc.item} replaces ${PIECE[other].item}.`); }
+  }
+  if (pc.hands) {
+    // weapons of the same set that cover the same member can't stack (two-hander vs the one-handed pair)
+    for (const other of [...equipped]) { const o = pieceById(other); if (o.hands && o.set === pc.set && o.covers.some(m => pc.covers.includes(m))) { equipped.delete(other); delete gearHand[other]; } }
+    freeHands(pc.hands, pc.item);
+    gearHand[id] = pc.hands === 2 ? ["R", "L"] : [["R", "L"].find(h => !handTaken(h)) || "R"];
+  }
+  equipped.add(id); gearOrder[id] = ++counter;
+}
+
+function toggle(s) {
+  if (!s) return;
+  if (!s.wanted) {
+    const sk = SLOT_OF[s.id];
+    let swapOut = null;
+    if (sk === "hands") {
+      if (handsUsed() >= 2) {
+        const old = handItems()[0];
+        if (old.kind === "stem") swapOut = old.ref;
+        else { freeHands(1, s.power); }
+      }
+    } else if (sk) {
+      const users = STEMS.filter(x => SLOT_OF[x.id] === sk && x.wanted).sort((a, b) => a.order - b.order);
+      if (users.length >= SLOTS[sk].cap) swapOut = users[0];
+    }
+    if (!s.base && !s.pilot && !swapOut) {
+      const cap = +document.getElementById("tier").value;
+      const used = layers().filter(x => x.wanted).length;
+      if (used >= cap) { toast(`All ${cap} layer slots are full for this tier. Drop a layer first.`); return; }
+    }
+    if (swapOut) {
+      s.hand = swapOut.hand;
+      toggle(swapOut);
+      toast(`${SLOTS[sk].label} full: ${s.power} swaps in for ${swapOut.power} on the next bar.`);
+    } else if (sk === "hands") {
+      s.hand = ["R", "L"].find(h => !handTaken(h)) || "R";
+    } else if (sk === "speakers") {
+      s.hand = ["R", "L"].find(h => !STEMS.some(x => x.wanted && x.hand === h && SLOT_OF[x.id] === "speakers")) || "R";
+    }
+    s.wanted = true; s.order = ++counter; s.gate = true;
+    if (s.pilot) pilotCrash = true;
+    if (!playing || !nodes) { if (nodes) ramp(s.fader.gain, 1, Tone.now(), 0.01); setState(s, "on"); return; }
+    const t = nextLine(s.pilot ? "1m" : undefined);
+    if (!s.dropped) enterAt(s, t);
+    setState(s, "queued"); setState(s, s.dropped ? "dropped" : "on", t);
+  } else {
+    s.wanted = false; s.order = ++counter;
+    if (s.dropped) { s.dropped = false; }
+    if (!playing || !nodes) { if (nodes) ramp(s.fader.gain, 0, Tone.now(), 0.01); s.gate = false; setState(s, "off"); return; }
+    const t = nextLine(s.pilot ? "1m" : undefined);
+    leaveAt(s, t, exitLen());
+    setState(s, "leaving"); setState(s, "off", t);
+  }
+}
+
+function takeHit() {
+  if (!playing || !nodes) { toast("Press Play first."); return; }
+  nodes.hitfx.triggerAttackRelease("8n", Tone.now() + 0.01, 0.9);
+  flash();
+  const victim = layers().filter(s => s.wanted && !s.dropped).sort((a, b) => b.order - a.order)[0];
+  const bars = +document.getElementById("dropBars").value;
+  const curBar = Math.floor(Tone.Transport.ticks / (Tone.Transport.PPQ * 4));
+  recoverBar = curBar + 1 + bars;           // restarts the timer on every hit
+  if (!victim) { toast("No layer to drop. The base beat never drops out."); return; }
+  victim.dropped = true;
+  const t = nextLine("8n");
+  ramp(victim.fader.gain, 0, t, 0.04);
+  setState(victim, "dropped", t);
+}
+function recoverAll(time) {
+  recoverBar = -1;
+  for (const s of layers()) {
+    if (!s.dropped) continue;
+    s.dropped = false;
+    if (s.wanted) { ramp(s.fader.gain, 1, time, 0.012, time); setState(s, "on", time); }
+  }
+}
+
+function resetRun() {
+  if (!nodes || !playing) {
+    for (const s of STEMS) { s.wanted = !!s.base; s.dropped = false; s.gate = s.wanted; s.state = s.wanted ? "on" : "off"; if (nodes) ramp(s.fader.gain, s.wanted ? 1 : 0, Tone.now(), 0.01); }
+    recoverBar = -1; render(); return;
+  }
+  const t = nextLine("1m");
+  recoverBar = -1;
+  for (const s of STEMS) {
+    if (s.base) { if (!s.wanted) { s.wanted = true; s.gate = true; s.order = ++counter; enterAt(s, t); setState(s, "on", t); } continue; }
+    if (s.wanted || s.dropped) { s.wanted = false; s.dropped = false; s.order = ++counter; leaveAt(s, t, exitLen()); setState(s, "leaving"); setState(s, "off", t); }
+  }
+  toast("New run: back to the lone beat on the next bar.");
+}
+
+// ---------- Transport ----------
+let playing = false;
+async function play() {
+  const btn = document.getElementById("playBtn");
+  if (!playing) {
+    await Tone.start();
+    if (!nodes) { nodes = build(); try { await nodes.reverb.ready; } catch (e) {} }
+    for (const s of STEMS) { const on = s.wanted && !s.dropped; s.fader.gain.cancelScheduledValues(0); s.fader.gain.value = on ? 1 : 0; s.gate = s.wanted; s.state = s.dropped ? "dropped" : (s.wanted ? "on" : "off"); }
+    for (const id in SETS) setNow[id] = membersOf(id);
+    fullSet = null; setEntry = false; pilotNow = byId("rock").wanted;
+    specialPending = false; specialPhase = null; mixLoud = false; invulnUntil = 0;
+    nodes.slowLP.frequency.cancelScheduledValues(0); nodes.slowLP.frequency.value = 20000;
+    document.querySelector(".stage-wrap").classList.remove("slowmo", "shred");
+    nodes.duckBus.gain.cancelScheduledValues(0); nodes.duckBus.gain.value = 1;
+    nodes.beatBus.gain.cancelScheduledValues(0); nodes.beatBus.gain.value = 1;
+    for (const id in SETS) { RT[id].bus.gain.cancelScheduledValues(0); RT[id].bus.gain.value = 0.45; }
+    Tone.Transport.bpm.value = +document.getElementById("tempo").value;
+    Tone.Transport.position = 0;
+    Tone.Transport.start("+0.08");
+    playing = true; btn.innerHTML = "■ Stop <kbd>Space</kbd>";
+  } else {
+    Tone.Transport.stop();
+    playing = false; btn.innerHTML = "▶ Play <kbd>Space</kbd>";
+    recoverBar = -1;
+    for (const s of layers()) if (s.dropped) { s.dropped = false; s.state = s.wanted ? "on" : "off"; }
+    fullSet = null; specialPending = false; specialPhase = null; invulnUntil = 0;
+    document.querySelector(".stage-wrap").classList.remove("slowmo", "shred");
+    drawClock(-1);
+  }
+  render(); renderGear();
+}
+
+// ---------- UI ----------
+const grid = document.getElementById("grid");
+for (const s of STEMS) {
+  const el = document.createElement("div");
+  el.className = "ch"; el.style.setProperty("--c", s.color); el.dataset.id = s.id;
+  el.innerHTML = `
+    <button class="tog" type="button" aria-pressed="false">
+      <span class="row1"><span class="power">${s.power}</span><span class="slot">${s.slot}</span></span>
+      <span class="layer">${s.layer}</span>
+    </button>
+    <span class="fx">${s.fx}</span>
+    <span class="fx">Mounts on: <b style="color:var(--ink);font-weight:500">${MOUNT[s.id].label}</b></span>
+    <span class="state"><i class="dot"></i><span class="st">Off</span><span style="margin-left:auto;opacity:.7">key ${s.key}</span></span>
+    <span class="vol"><label for="v-${s.id}">dB</label><input id="v-${s.id}" type="range" min="-36" max="6" step="1" value="${s.db}"><output>${s.db}</output></span>`;
+  el.querySelector(".tog").addEventListener("click", () => s.pilot ? setPilot(!s.wanted) : toggle(s));
+  const r = el.querySelector("input"), o = el.querySelector("output");
+  r.addEventListener("input", () => { s.db = +r.value; o.textContent = s.db; if (s.vol) s.vol.volume.rampTo(s.db, 0.05); });
+  s.el = el; grid.appendChild(el);
+}
+byId("beat").wanted = true; byId("beat").gate = true; byId("beat").state = "on";
+
+const LABEL = { off: "Off", queued: "Queued · enters on the line", on: "Playing", leaving: "Leaving on the line", dropped: "Dropout · muted" };
+function render() {
+  const live = layers().filter(s => s.state === "on" || s.state === "leaving").length;
+  const cap = +document.getElementById("tier").value;
+  for (const s of STEMS) {
+    s.el.dataset.state = s.state;
+    s.el.querySelector(".st").textContent = LABEL[s.state];
+    s.el.querySelector(".tog").setAttribute("aria-pressed", String(s.wanted));
+  }
+  document.getElementById("layerPill").textContent = `Layers ${layers().filter(s => s.wanted).length} / ${cap}`;
+  const stage = document.getElementById("stage");
+  const pilotOn = byId("rock").state === "on";
+  stage.style.setProperty("--sat", (0.08 + 0.92 * Math.min(live, 8) / 8 + (pilotOn ? 0.15 : 0)).toFixed(2));
+  stage.style.setProperty("--bri", (0.62 + 0.38 * Math.min(live, 8) / 8).toFixed(2));
+  document.getElementById("mech").classList.toggle("piloted", pilotOn);
+  const pp = document.getElementById("powerPill");
+  pp.textContent = pilotOn ? (fullSet ? `${SETS[fullSet].name} · set bonus` : "Pilot · 100% battle power") : "Autopilot · 60%";
+  pp.classList.toggle("pilot", pilotOn);
+  document.getElementById("pilotBtn").setAttribute("aria-pressed", String(byId("rock").wanted));
+  // Amp Rig: light the slots in use
+  const mech = document.getElementById("mech");
+  mech.querySelectorAll("[data-part]").forEach(e => { e.classList.remove("on", "drop", "armor"); e.style.removeProperty("--c"); });
+  for (const s of STEMS) {
+    const live = s.state === "on" || s.state === "leaving", dr = s.state === "dropped";
+    if (!live && !dr) continue;
+    for (const id of MOUNT[s.id].parts) { const e = mech.querySelector(`[data-part="${id}"]`); e.classList.add(dr ? "drop" : "on"); e.style.setProperty("--c", s.color); }
+  }
+  // Hands hold weapons, speakers hold charms: show whichever item is actually in each one
+  const shownIn = (sk, h) => STEMS.filter(x => SLOT_OF[x.id] === sk && x.hand === h && ["on", "leaving", "dropped"].includes(x.state))
+    .sort((a, b) => (a.state === "on") - (b.state === "on") || a.order - b.order).pop();
+  for (const h of ["R", "L"]) {
+    const g = mech.querySelector("#wpn" + h), w = shownIn("hands", h);
+    const gw = [...equipped].find(id => (gearHand[id] || []).includes(h));
+    if (gw) {
+      const S = SETS[PIECE[gw].set];
+      const hand = mech.querySelector(`[data-part="hand${h}"]`); hand.classList.add("on"); hand.style.setProperty("--c", S.color);
+      if (gearHand[gw][0] !== h) { g.innerHTML = ""; g.removeAttribute("class"); }
+      else { g.innerHTML = `<title>${PIECE[gw].item}</title>` + S.wpn[gw]; g.setAttribute("class", "wpn" + (specialPhase === "solo" && specialSet === S.id ? " charged" : "")); g.style.setProperty("--c", S.color); }
+    }
+    else if (!w) { g.innerHTML = ""; g.removeAttribute("class"); }
+    else {
+      g.innerHTML = `<title>${h === "R" ? "Right" : "Left"} hand: ${w.power}</title>` + WPN[w.id];
+      g.setAttribute("class", "wpn" + (w.state === "dropped" ? " drop" : "")); g.style.setProperty("--c", w.color);
+      const hand = mech.querySelector(`[data-part="hand${h}"]`); hand.classList.add(w.state === "dropped" ? "drop" : "on"); hand.style.setProperty("--c", w.color);
+    }
+    const ch = shownIn("speakers", h);
+    const spk = mech.querySelector(`[data-part="spk${h}"]`);
+    if (ch) { spk.classList.add(ch.state === "dropped" ? "drop" : "on"); spk.style.setProperty("--c", ch.color); }
+  }
+  for (const id of equipped) { const pc = PIECE[id]; if (!pc.body) continue; for (const part of BODY[pc.body].parts) { const e = mech.querySelector(`[data-part="${part}"]`); e.classList.add("armor"); e.style.setProperty("--ac", SETS[pc.set].color); } }
+  // Slot chips
+  const chips = Object.entries(SLOTS).map(([k, sl]) => {
+    const items = k === "hands" ? handItems() : STEMS.filter(x => SLOT_OF[x.id] === k && x.wanted).map(x => ({ name: x.power, hands: 1 }));
+    const used = items.reduce((t, i) => t + i.hands, 0);
+    return `<div class="slotchip${used >= sl.cap ? " full" : ""}"><b>${sl.label}<span>${used}/${sl.cap}</span></b><em>${items.map(x => x.name + (x.hands === 2 ? " (both hands)" : "")).join(", ") || "empty · " + sl.what}</em></div>`;
+  }).concat(LOCKED.map(([l, w]) => `<div class="slotchip locked"><b>${l}<span>locked</span></b><em>later: ${w}</em></div>`));
+  document.getElementById("slots").innerHTML = chips.join("");
+  mech.classList.toggle("metal", !!fullSet);
+  if (fullSet) mech.style.setProperty("--sc", SETS[fullSet].color);
+}
+function drawClock(step) {
+  const pips = document.querySelectorAll(".pip");
+  if (step < 0) { pips.forEach(p => p.classList.remove("on", "down")); document.getElementById("barpos").textContent = "Bar 1.1"; document.getElementById("chord").textContent = "Am"; return; }
+  const inBar = step % BAR, beat = Math.floor(inBar / 4);
+  if (inBar % 4 === 0) {
+    pips.forEach((p, i) => { p.classList.toggle("on", i === beat); p.classList.toggle("down", i === 0 && beat === 0); });
+    const rig = document.getElementById("mech"); rig.classList.add("beat"); setTimeout(() => rig.classList.remove("beat"), 90);
+  }
+  document.getElementById("barpos").textContent = `Bar ${Math.floor(step / BAR) + 1}.${beat + 1}`;
+  document.getElementById("chord").textContent = chordAt(step).name;
+  if (nodes) { const db = nodes.meter.getValue(); const v = typeof db === "number" ? db : -100; document.getElementById("meter").style.width = Math.max(0, Math.min(100, (v + 48) / 48 * 100)) + "%"; }
+}
+// Gear panels, one per set, built from SETS
+const setsEl = document.getElementById("sets");
+for (const id in SETS) {
+  const S = SETS[id], sp = S.special;
+  const two = PIECE[sp.two], pair = sp.pair.map(p => PIECE[p]);
+  const el = document.createElement("section");
+  el.className = "gear"; el.style.setProperty("--sc", S.color); el.dataset.set = id;
+  el.innerHTML = `<div class="gear-head"><h2>${S.name} set <small class="setCount"></small></h2>
+    <div class="gear-actions">
+      <button class="btn" type="button" data-act="two">Equip with ${two.item} <kbd>${S.key}</kbd></button>
+      <button class="btn" type="button" data-act="pair">Equip with ${pair.map(p => p.item).join(" + ")}</button>
+      <button class="btn" type="button" data-act="none">Unequip</button>
+    </div></div>
+    <div class="setbar"><i></i></div><div class="pieces"></div><div class="gear-status"></div>`;
+  const pe = el.querySelector(".pieces");
+  for (const pc of S.pieces) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "piece"; b.setAttribute("aria-pressed", "false");
+    const where = pc.body ? BODY[pc.body].label : pc.hands === 2 ? "Both hands" : "One hand";
+    b.innerHTML = `<b>${pc.item}</b><span>${where} · ${pc.member}<br>${pc.adds}${pc.hands === 2 ? " · counts as 2" : ""}</span>`;
+    b.addEventListener("click", () => { equipPiece(pc.id); renderGear(); });
+    pc.el = b; pe.appendChild(b);
+  }
+  el.querySelector('[data-act="two"]').addEventListener("click", () => equipSet(id, [sp.two]));
+  el.querySelector('[data-act="pair"]').addEventListener("click", () => equipSet(id, sp.pair));
+  el.querySelector('[data-act="none"]').addEventListener("click", () => { unequipSet(id); renderGear(); });
+  S.el = el; setsEl.appendChild(el);
+}
+function renderGear() {
+  for (const id in SETS) {
+    const S = SETS[id], el = S.el, k = membersOf(id).size;
+    for (const pc of S.pieces) pc.el.setAttribute("aria-pressed", String(equipped.has(pc.id)));
+    el.querySelector(".setCount").textContent = `${k} / ${SET_SIZE}`;
+    el.querySelector(".setbar i").style.width = (k / SET_SIZE * 100) + "%";
+    el.classList.toggle("full", fullSet === id);
+    const st = el.querySelector(".gear-status");
+    const playingNames = S.pieces.filter(p => equipped.has(p.id)).map(p => p.adds).join(", ");
+    if (fullSet === id) st.innerHTML = `<b>Set bonus active.</b> The lead vocal is in, the EDM beat steps aside and everything else ducks under. Press X for ${specialLabel(id)}.`;
+    else if (k === 0) st.innerHTML = "Each piece plays its member as soon as you equip it. More pieces sound tighter. All seven plus Pilot mode trigger the set bonus.";
+    else {
+      const stage = pilotNow ? "Piloting: full power" : k >= 4 ? S.tight : S.loose;
+      st.innerHTML = `<b>${stage}.</b> Playing: ${playingNames}. ` + (k === SET_SIZE ? `${specialLabel(id)} (X) is ready. Take control (P) for the set bonus.` : `${SET_SIZE - k} more for the full set.`);
+    }
+  }
+  render(); renderSpecial();
+}
+function unequipSet(id) { for (const pc of SETS[id].pieces) { equipped.delete(pc.id); delete gearHand[pc.id]; } }
+function equipSet(id, weapons) {
+  const S = SETS[id];
+  for (const pc of S.pieces) if (pc.hands && equipped.has(pc.id) && !weapons.includes(pc.id)) { equipped.delete(pc.id); delete gearHand[pc.id]; }
+  S.pieces.filter(pc => pc.body).forEach(pc => { if (!equipped.has(pc.id)) equipPiece(pc.id); });
+  weapons.forEach(w => { if (!equipped.has(w)) equipPiece(w); });
+  renderGear();
+}
+document.getElementById("specialBtn").addEventListener("click", triggerSpecial);
+
+function setPilot(on) { const s = byId("rock"); if (s.wanted !== on) toggle(s); }
+function flash() { const f = document.getElementById("hitFlash"); f.classList.add("on"); setTimeout(() => f.classList.remove("on"), 60); }
+let toastT; function toast(msg) { const t = document.getElementById("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2600); }
+
+document.getElementById("playBtn").addEventListener("click", play);
+document.getElementById("pilotBtn").addEventListener("click", () => setPilot(!byId("rock").wanted));
+document.getElementById("hitBtn").addEventListener("click", takeHit);
+document.getElementById("resetBtn").addEventListener("click", resetRun);
+document.getElementById("tier").addEventListener("change", render);
+document.getElementById("tempo").addEventListener("input", e => {
+  const v = +e.target.value; document.getElementById("tempoOut").textContent = v; document.getElementById("bpmFact").textContent = v;
+  if (nodes) Tone.Transport.bpm.rampTo(v, 0.2);
+});
+document.getElementById("master").addEventListener("input", e => { if (nodes) nodes.master.volume.rampTo(+e.target.value, 0.05); });
+document.addEventListener("keydown", e => {
+  if (e.target.closest && e.target.closest("select, input")) return;
+  if (e.code === "Space") { e.preventDefault(); play(); return; }
+  const k = e.key.toUpperCase();
+  if (k === "P") setPilot(!byId("rock").wanted);
+  else if (Object.values(SETS).some(S => S.key === k)) { const S = Object.values(SETS).find(S => S.key === k); if (membersOf(S.id).size === SET_SIZE) { unequipSet(S.id); renderGear(); } else equipSet(S.id, [S.special.two]); }
+  else if (k === "X") triggerSpecial();
+  else if (k === "H") takeHit();
+  else if (k === "R") resetRun();
+  else { const s = STEMS.find(x => x.key === k && !x.pilot); if (s) toggle(s); }
+});
+renderGear();
+window.__lab = { STEMS, byId, toggle, takeHit, setPilot, resetRun, play, equipped, SETS, PIECE, RT, equipSet, unequipSet, renderGear, triggerSpecial, equipPiece, handItems,
+  get specialPhase() { return specialPhase; }, get specialSet() { return specialSet; }, get fullSet() { return fullSet; }, get nodes() { return nodes; } };
+})();
+</script>
+
+</html>

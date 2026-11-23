@@ -1,0 +1,2265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Great Warrior Gig Run</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one full-screen stage. The arena canvas fills it, a thin HUD rides the top and bottom edges, and every between-room screen is a centered panel over the arena. Single dark "stage lights" look, shared with the Sound Lab. */
+:root {
+  color-scheme: dark;
+  --ground: #100e18;
+  --panel: #1a1726;
+  --panel-2: #221e32;
+  --line: #2f2a44;
+  --ink: #efeaf9;
+  --mute: #9a92b6;
+  --hot: #ff5c8a;
+  --gold: #ffd166;
+  --ok: #5ee0a0;
+  --f-display: "Chakra Petch", "Trebuchet MS", system-ui, sans-serif;
+  --f-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { background: var(--ground); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.45; overflow: hidden; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+#app { position: relative; height: 100%; width: 100%; overflow: hidden; user-select: none; -webkit-user-select: none; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+/* HUD */
+.hud { position: absolute; left: 0; right: 0; pointer-events: none; display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap;
+  padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
+.hud.top { top: 0; padding-block: 10px 0; }
+.hud.bottom { bottom: 0; padding-block: 0 10px; align-items: flex-end; }
+.hud > * { pointer-events: auto; }
+.box { background: rgba(16,14,24,.82); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; font-size: .82rem; }
+.hp { display: grid; gap: 4px; min-width: 170px; }
+.hp .row { display: flex; justify-content: space-between; gap: 8px; font-family: var(--f-mono); font-size: .74rem; color: var(--mute); }
+.hp .row b { color: var(--ink); font-weight: 500; }
+.bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--hot), #ff8fae); transition: width .15s; }
+.bar.xp i { background: linear-gradient(90deg, var(--gold), #ffe3a3); }
+.bar.boss i { background: linear-gradient(90deg, #b18cff, var(--hot)); }
+.mid { display: grid; gap: 4px; justify-items: center; text-align: center; }
+.mid .room { font-family: var(--f-display); font-weight: 700; letter-spacing: .04em; font-size: .9rem; }
+.map { display: flex; gap: 4px; }
+.map i { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); font-style: normal; font-family: var(--f-mono); font-size: 9px; line-height: 12px; text-align: center; color: var(--mute); }
+.map i.done { background: var(--line); color: var(--ink); }
+.map i.now { border-color: var(--gold); color: var(--gold); }
+.map i.boss { border-color: #6b2f42; }
+.right { display: grid; gap: 6px; justify-items: end; }
+.pill { white-space: nowrap; font-family: var(--f-mono); font-size: .76rem; background: rgba(10,8,18,.8); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; }
+.pill.pilot { border-color: var(--hot); color: var(--hot); }
+.pill.queued { border-style: dashed; }
+.pill.inv { border-color: var(--gold); color: var(--gold); }
+.btn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; justify-content: center; }
+.btn:hover { border-color: #4a4268; }
+.btn kbd { font-family: var(--f-mono); font-size: .68rem; opacity: .65; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; }
+.btn.primary { background: var(--gold); border-color: var(--gold); color: #1a1405; }
+.btn.special { border-color: var(--gold); color: var(--gold); padding: 6px 12px; font-size: .82rem; }
+.btn.special:disabled { opacity: .45; cursor: not-allowed; border-color: var(--line); color: var(--mute); }
+.btn.special.live { background: var(--gold); color: #1a1405; }
+.btn.small { padding: 6px 10px; font-size: .8rem; }
+.loadout { display: flex; flex-wrap: wrap; gap: 6px; max-width: min(760px, 100%); }
+.chip { --c: #888; display: flex; align-items: center; gap: 6px; background: rgba(16,14,24,.85); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: .76rem; white-space: nowrap; }
+.chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.chip b { font-weight: 600; }
+.chip span { font-family: var(--f-mono); color: var(--mute); font-size: .68rem; }
+.chip.on { border-color: var(--c); }
+.chip.queued i, .chip.leaving i { animation: flick .5s steps(2) infinite; }
+.chip.dropped { border-color: #6b2f42; }
+.chip.dropped i { background: var(--hot); animation: flick .2s steps(2) infinite; }
+.chip.gear { border-style: dashed; }
+.chip.empty { color: var(--mute); border-style: dashed; }
+.pips { display: flex; gap: 4px; align-items: center; }
+.pips i { width: 10px; height: 10px; border-radius: 2px; background: var(--line); }
+.pips i.on { background: var(--gold); }
+.pips i.on.down { background: var(--hot); }
+.touchpad { display: none; gap: 8px; }
+@media (pointer: coarse) { .touchpad { display: flex; } }
+@keyframes flick { 50% { opacity: .1; } }
+.banner { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); font-family: var(--f-display); font-weight: 700; font-size: clamp(1.2rem, 4vw, 2rem); letter-spacing: .05em; text-align: center; pointer-events: none; opacity: 0; transition: opacity .3s; text-shadow: 0 0 18px rgba(255,92,138,.6); max-width: calc(100% - 32px); }
+.banner.show { opacity: 1; }
+.banner small { display: block; font-family: var(--f-body); font-weight: 500; font-size: .9rem; color: var(--mute); text-shadow: none; letter-spacing: 0; }
+
+/* Screens */
+.screen { position: absolute; inset: 0; display: grid; place-items: center; overflow-y: auto; background: rgba(10,8,18,.72); backdrop-filter: blur(2px);
+  padding-block: 20px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.panel { width: min(920px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 14px; }
+.panel h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(1.6rem, 5vw, 2.4rem); margin: 0; letter-spacing: .02em; line-height: 1.1; text-wrap: balance; }
+.panel h1 span { color: var(--gold); }
+.panel h2 { font-family: var(--f-display); font-size: 1.15rem; margin: 0; letter-spacing: .03em; text-wrap: balance; }
+.panel h3 { font-family: var(--f-display); font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); margin: 0; }
+.panel p { margin: 0; color: var(--mute); max-width: 68ch; }
+.panel p b { color: var(--ink); font-weight: 600; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; align-items: start; }
+.cols > * { min-width: 0; }
+.stat { display: flex; flex-wrap: wrap; gap: 6px 16px; font-family: var(--f-mono); font-size: .8rem; color: var(--mute); }
+.stat b { color: var(--ink); font-weight: 500; }
+.list { display: grid; gap: 6px; }
+.item { display: flex; gap: 10px; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel-2); }
+.item > div { min-width: 0; }
+.item b { font-family: var(--f-display); font-size: .92rem; display: block; }
+.item span { font-size: .78rem; color: var(--mute); display: block; }
+.item.own { border-color: #2f5c48; }
+.item.ban { border-color: #6b2f42; }
+.item .btn { flex: none; }
+.perks { display: grid; gap: 4px; font-size: .82rem; color: var(--mute); }
+.perks .got { color: var(--ink); }
+.perks .got::before { content: "■ "; color: var(--gold); }
+.perks .next::before { content: "□ "; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.card { --c: #888; all: unset; box-sizing: border-box; cursor: pointer; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.card:hover, .card:focus-visible { border-color: var(--c); box-shadow: 0 0 0 1px var(--c), 0 0 22px -8px var(--c); }
+.card:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.card .tag { font-family: var(--f-mono); font-size: .66rem; letter-spacing: .08em; color: var(--c); border: 1px solid var(--c); border-radius: 5px; padding: 1px 6px; justify-self: start; }
+.card b { font-family: var(--f-display); font-size: 1.15rem; }
+.card .music { font-size: .85rem; color: var(--ink); }
+.card .fx { font-size: .82rem; color: var(--mute); }
+.card .warn { font-size: .78rem; color: var(--hot); }
+.card .slot { font-family: var(--f-mono); font-size: .7rem; color: var(--mute); }
+.card kbd { font-family: var(--f-mono); font-size: .68rem; color: var(--mute); justify-self: end; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.check { display: flex; gap: 8px; align-items: center; font-size: .86rem; color: var(--mute); }
+.check input { accent-color: var(--gold); width: 16px; height: 16px; }
+.keys { font-size: .82rem; color: var(--mute); display: grid; gap: 3px; }
+.keys kbd { font-family: var(--f-mono); font-size: .7rem; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+.summary-big { font-family: var(--f-display); font-size: 2rem; font-weight: 700; color: var(--gold); }
+.lvup { color: var(--gold); font-weight: 600; }
+@media (max-width: 560px) {
+  .hp { min-width: 130px; }
+  .map i { width: 11px; height: 11px; font-size: 0; }
+  .chip span { display: none; }
+  .chip.empty { display: none; }
+  .hud.top { flex-wrap: nowrap; gap: 6px; }
+  .hud.top .hp { min-width: 0; flex: 1 1 0; }
+  .mid { flex: none; }
+  .mid .map { display: none; }
+  .mid .room { font-size: .78rem; }
+  .btn.special { padding: 4px 8px; font-size: .72rem; }
+  .pill { font-size: .68rem; padding: 3px 8px; }
+  .panel { padding: 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .chip i { animation: none !important; } }
+</style>
+
+<div id="app">
+  <canvas id="cv" aria-label="Arena"></canvas>
+
+  <div class="hud top" id="hudTop" hidden>
+    <div class="box hp">
+      <div class="row"><span>Hull</span><b id="hpTxt">100 / 100</b></div>
+      <div class="bar"><i id="hpBar"></i></div>
+      <div class="row"><span id="shieldTxt">Shield none</span><span id="layerTxt">Layers 0 / 3</span></div>
+    </div>
+    <div class="box mid">
+      <span class="room" id="roomTxt">Room 1 · Act I</span>
+      <div class="map" id="map"></div>
+      <div class="bar boss" id="bossWrap" hidden style="width:220px;max-width:50vw"><i id="bossBar"></i></div>
+    </div>
+    <div class="right">
+      <span class="pill" id="modePill">Autopilot · 60%</span>
+      <button class="btn special" id="specialBtn" type="button" disabled>Shred special <kbd>X</kbd></button>
+    </div>
+  </div>
+
+  <div class="hud bottom" id="hudBot" hidden>
+    <div class="loadout" id="loadout"></div>
+    <div class="right">
+      <div class="touchpad"><button class="btn small" id="dashBtn" type="button">Dash</button><button class="btn small" id="pauseBtn" type="button">Pause</button></div>
+      <div class="box pips" id="pips"><i></i><i></i><i></i><i></i><span id="chordTxt" style="font-family:var(--f-mono);font-size:.74rem;color:var(--gold);margin-left:4px">Am</span></div>
+    </div>
+  </div>
+
+  <div class="banner" id="banner"></div>
+  <div class="screen" id="screen"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<script>
+(() => {
+"use strict";
+// ===== Music data, gear sets and synth graph: carried over from the Sound Lab (v6 sets engine) =====
+const STEPS = 128;             // 8 bars of 16th notes
+const BAR = 16;
+// Chord table: Am | F | C | G, repeated for 8 bars
+const CH = [
+  { name: "Am", bass: ["A1","A2","E2"], pad: ["A3","C4","E4"], choir: ["E4","A4","C5"], arp: ["A4","C5","E5","A5"], str: ["A3","A4","E4","A4"], wob: "A1" },
+  { name: "F",  bass: ["F1","F2","C2"], pad: ["A3","C4","F4"], choir: ["F4","A4","C5"], arp: ["F4","A4","C5","F5"], str: ["F3","F4","C4","F4"], wob: "F1" },
+  { name: "C",  bass: ["C2","C3","G2"], pad: ["G3","C4","E4"], choir: ["E4","G4","C5"], arp: ["G4","C5","E5","G5"], str: ["C4","C5","G4","C5"], wob: "C2" },
+  { name: "G",  bass: ["G1","G2","D2"], pad: ["G3","B3","D4"], choir: ["D4","G4","B4"], arp: ["G4","B4","D5","G5"], str: ["G3","G4","D4","G4"], wob: "G1" },
+];
+const chordAt = step => CH[Math.floor(step / BAR) % 4];
+const s16 = () => Tone.Time("16n").toSeconds();
+const beatSec = () => Tone.Time("4n").toSeconds();
+
+// Flute melody: [step, note, lengthInSteps]
+const MELODY = [
+  [0,"E5",2],[2,"A5",2],[4,"C6",3],[7,"B5",1],[8,"A5",4],[12,"E5",4],
+  [16,"F5",2],[18,"A5",2],[20,"C6",4],[24,"D6",2],[26,"C6",2],[28,"A5",4],
+  [32,"G5",2],[34,"C6",2],[36,"E6",4],[40,"D6",2],[42,"C6",2],[44,"G5",4],
+  [48,"B5",3],[51,"A5",1],[52,"G5",2],[54,"D5",2],[56,"G5",6],
+  [64,"E5",2],[66,"A5",2],[68,"C6",3],[71,"B5",1],[72,"A5",2],[74,"C6",2],[76,"E6",4],
+  [80,"F6",3],[83,"E6",1],[84,"C6",4],[88,"A5",4],[92,"C6",4],
+  [96,"E6",2],[98,"D6",2],[100,"C6",2],[102,"G5",2],[104,"E5",4],[108,"G5",4],
+  [112,"B5",4],[116,"D6",4],[120,"B5",2],[122,"G5",2],[124,"A5",4],
+];
+const MEL = new Map(MELODY.map(m => [m[0], m]));
+// Taiko: 2-bar pattern [stepIn32, velocity, isRim]
+const TAIKO = new Map([[0,[1,0]],[3,[.45,0]],[6,[.6,0]],[8,[.9,0]],[12,[.5,1]],[14,[.6,1]],[16,[1,0]],[19,[.45,0]],[22,[.6,0]],[24,[.8,0]],[26,[.55,0]],[28,[.7,0]],[29,[.5,1]],[30,[.85,0]],[31,[.6,1]]]);
+// Funk bass per bar: [step, which(0 root,1 octave,2 fifth), len, vel]
+const FUNK = new Map([[0,[0,2,1]],[3,[0,1,.7]],[4,[1,1,.5]],[6,[0,1,.8]],[7,[1,1,.6]],[10,[0,2,.9]],[12,[2,1,.7]],[14,[1,1,.75]],[15,[0,1,.5]]]);
+// Wobble rates (cycles per beat), one row per bar
+const WOB_RATES = [[2,2,4,8],[3,3,2,1],[2,4,2,6],[1,2,4,8]];
+const ARP_ORDER = [0,1,2,3,2,1,2,3];
+
+// ================= Gear sets: one reusable engine =================
+// A set = 5 armor pieces (one per body slot) + weapons that use the Rig's hands, covering 7 members.
+// Each equipped piece plays its member right away, scaled by how much of the set is on:
+//   loose (1-3 members, autopilot): sparse parts behind a muffled filter
+//   tight (4+ members, or piloting): parts lock together, filter opens
+//   full  (all 7 + Pilot mode): set bonus, lead vocal, everything else ducks under
+// A full set unlocks its special: the two-handed weapon gives a solo, the two one-handed weapons a duel.
+// To add a set: call defineSet() with pieces, build(out) returning instruments, play(I, x) per 16th step,
+// and special.line(soloBar, chord) returning { notes: [midi...], sub: 1 | 2 }.
+const BODY = {
+  head:  { label: "Head",     parts: ["head"] },
+  back:  { label: "Back",     parts: ["cape"] },
+  arms:  { label: "Forearms", parts: ["foreR", "foreL"] },
+  waist: { label: "Waist",    parts: ["waist"] },
+  legs:  { label: "Legs",     parts: ["shinR", "shinL"] },
+};
+const SET_SIZE = 7;
+const SETS = {};
+const PIECE = {};
+function defineSet(def) { SETS[def.id] = def; for (const p of def.pieces) { p.set = def.id; PIECE[p.id] = p; } }
+const pieceById = id => PIECE[id];
+const equipped = new Set();
+const gearOrder = {}, gearHand = {};
+const membersOf = setId => new Set([...equipped].filter(id => PIECE[id].set === setId).flatMap(id => PIECE[id].covers));
+const RT = {};            // per-set runtime: bus, filter, instruments
+let setNow = {};          // per-set member snapshot taken on each bar line
+let fullSet = null;       // set whose full bonus is active
+let setEntry = false;
+let pilotNow = false;
+const up12 = n => Tone.Frequency(n).transpose(12).toNote();
+const melody = rows => new Map(rows.map(r => [r[0], r]));
+const VOWEL = { a: [800, 1150, 2900], o: [450, 800, 2830], u: [320, 870, 2240], sop: [950, 1450, 3000] };
+function mkFormant(input, vowel, out, qs = [5, 6, 8]) {
+  return vowel.map((f, i) => { const bp = new Tone.Filter({ type: "bandpass", frequency: f, Q: qs[i] }); const g = new Tone.Gain([1, 0.5, 0.22][i]); input.connect(bp); bp.connect(g); g.connect(out); return bp; });
+}
+function mkVoice(dest, o) {
+  const pan = new Tone.Panner(0);
+  const vib = new Tone.Vibrato(o.vibF || 6, o.vibD || 0.03);
+  const fx = new Tone.FeedbackDelay({ delayTime: o.delay || "16n", feedback: 0.2, wet: o.wet ?? 0.15 });
+  const lp = new Tone.Filter({ type: "lowpass", frequency: o.lp || 6000 });
+  const pre = o.dist ? [new Tone.Distortion({ distortion: o.dist, oversample: "2x" })] : [];
+  const syn = new Tone.Synth({ oscillator: { type: o.osc || "sawtooth" }, envelope: o.env || { attack: 0.002, decay: 0.08, sustain: 0.7, release: 0.05 }, portamento: o.port ?? 0.006 });
+  syn.chain(...pre, lp, vib, fx, pan, dest);
+  syn.volume.value = o.vol ?? -9;
+  return { syn, pan, vib };
+}
+const mid = n => Tone.Frequency(n).toMidi();
+const AMIN = (() => { const pcs = [9, 11, 0, 2, 4, 5, 7], out = []; for (let m = 40; m <= 100; m++) if (pcs.includes(m % 12)) out.push(m); return out; })();
+const idxOf = m => { let i = AMIN.findIndex(x => x >= m); return i < 0 ? AMIN.length - 1 : i; };
+const sc = i => AMIN[Math.max(0, Math.min(AMIN.length - 1, i))];
+const triOf = c => c.arp.slice(0, 3).map(mid);
+
+// ---------------- Power Metal ----------------
+const PC = { Am: ["A2","E3","A3"], F: ["F2","C3","F3"], C: ["C3","G3","C4"], G: ["G2","D3","G3"] };
+const GALLOP = new Set([0,2,3,4,6,7,8,10,11,12,14,15]);
+const SWEEP = [0,1,2,3,4,5,6,5,4,3,2,1,2,3,4,5];
+const RUN = (() => { const out = []; let m = 93; const steps = [2,2,1,2,2,1,2]; for (let i = 0; i < 32; i++) { out.push(Tone.Frequency(m, "midi").toNote()); m -= steps[i % 7]; } return out; })();
+const PM_VOX = melody([
+  [0,"E4",4,"o"],[4,"A4",4,"a"],[8,"C5",4,"o"],[12,"B4",4,"a"],
+  [16,"A4",6,"o"],[22,"G4",2,"a"],[24,"F4",4,"o"],[28,"A4",4,"a"],
+  [32,"G4",4,"o"],[36,"E4",4,"a"],[40,"C4",4,"o"],[44,"E4",4,"a"],
+  [48,"D4",6,"o"],[54,"E4",2,"a"],[56,"G4",4,"o"],[60,"B4",4,"a"],
+  [64,"A4",2,"o"],[66,"C5",2,"a"],[68,"E5",12,"a"],
+  [80,"D5",4,"o"],[84,"C5",4,"a"],[88,"A4",8,"o"],
+  [96,"G4",4,"o"],[100,"C5",4,"a"],[104,"E5",8,"a"],
+  [112,"D5",8,"o"],[120,"B4",4,"a"],[124,"G4",4,"o"],
+]);
+defineSet({
+  id: "pm", name: "Power Metal", color: "#ff5c8a", key: "M",
+  loose: "Loose: sparse and muffled", tight: "Locked in: the band plays one gallop together",
+  pieces: [
+    { id: "pm-greaves", body: "legs",  covers: ["drums"],  item: "Thunderstep Greaves", member: "Drummer",        adds: "double-kick" },
+    { id: "pm-girdle",  body: "waist", covers: ["bass"],   item: "Low-End Girdle",      member: "Bassist",        adds: "metal bass" },
+    { id: "pm-bracers", body: "arms",  covers: ["keys"],   item: "Keytar Bracers",      member: "Keyboardist",    adds: "synth stabs" },
+    { id: "pm-cloak",   body: "back",  covers: ["choir"],  item: "Chorus Cloak",        member: "Backing vocals", adds: "“oh” backing choir" },
+    { id: "pm-helm",    body: "head",  covers: ["vocals"], item: "Banshee Helm",        member: "Lead vocalist",  adds: "lead vocals" },
+    { id: "pm-axe",     hands: 2, covers: ["lead", "rhythm"], item: "Lightning Axe", member: "Lead + rhythm guitar", adds: "gallop riffs and shred runs", note: "Two-handed · counts as 2" },
+    { id: "pm-hatchet", hands: 1, covers: ["lead"],   item: "Shred Hatchet", member: "Lead guitar",   adds: "shred runs",   note: "One-handed" },
+    { id: "pm-cleaver", hands: 1, covers: ["rhythm"], item: "Riff Cleaver",  member: "Rhythm guitar", adds: "gallop riffs", note: "One-handed" },
+  ],
+  wpn: {
+    "pm-axe":     '<rect x="-16" y="-4" width="16" height="9" rx="2"/><rect x="0" y="-1" width="92" height="4" rx="1"/><polygon points="88,-5 104,-24 126,-15 117,2 126,22 104,24 88,8"/>',
+    "pm-hatchet": '<rect x="-1.5" y="2" width="3" height="42" rx="1"/><polygon points="-2,6 -17,-2 -19,18 -2,15"/>',
+    "pm-cleaver": '<rect x="-1.5" y="2" width="3" height="18"/><rect x="-1" y="18" width="15" height="28" rx="2"/>',
+  },
+  special: {
+    name: "Shred special", duel: "Dueling axes", two: "pm-axe", pair: ["pm-hatchet", "pm-cleaver"], duelOffset: 0,
+    voice: { dist: 0.9, lp: 6200, delay: "16n", vibF: 6.2, vibD: 0.025 },
+    voiceB: { dist: 0.9, lp: 5600, delay: "16n", vibF: 5.8, vibD: 0.025 },
+    // Original shred phrases: pedal-tone climb, sweeps, descending fours, tapped triads, climb
+    line(sb, c) {
+      const root = mid(c.arp[0]), tri = triOf(c), out = [];
+      for (let i = 0; i < 32; i++) {
+        if (sb === 0) { const hi = idxOf(root + 12); out.push(i % 2 === 0 ? sc(hi) : sc(hi + 1 + ((i >> 1) % 7))); }
+        else if (sb === 1) { const t = [tri[0], tri[1], tri[2], tri[0] + 12, tri[1] + 12, tri[2] + 12, tri[0] + 24]; out.push(t[[0,1,2,3,4,5,6,5,4,3,2,1][i % 12]]); }
+        else if (sb === 2) { const top = idxOf(root + 24); out.push(sc(top - Math.floor(i / 4) - (i % 4))); }
+        else if (sb === 3) { out.push([tri[0] + 24, tri[2] + 12, tri[1] + 12, tri[2] + 12][i % 4]); }
+        else out.push(sc(idxOf(root) + Math.floor(i * 14 / 31)));
+      }
+      return { notes: out, sub: 2 };
+    },
+  },
+  build(out) {
+    const I = {};
+    const msnHP = new Tone.Filter({ type: "highpass", frequency: 1300 }).connect(out);
+    I.snare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.16, sustain: 0 } }).connect(msnHP);
+    I.snBody = new Tone.MembraneSynth({ pitchDecay: 0.015, octaves: 1.5, envelope: { attack: 0.001, decay: 0.1, sustain: 0 } }).connect(out);
+    I.snBody.volume.value = -3;
+    I.kick = new Tone.MembraneSynth({ pitchDecay: 0.012, octaves: 3.5, envelope: { attack: 0.001, decay: 0.11, sustain: 0 } }).connect(out);
+    I.kick.volume.value = -2;
+    const gtrHP = new Tone.Filter({ type: "highpass", frequency: 85 });
+    const gtrOut = new Tone.Gain(0.55).connect(out);
+    gtrHP.chain(new Tone.Distortion({ distortion: 0.95, oversample: "2x" }), new Tone.Filter({ type: "lowpass", frequency: 3800, rolloff: -24 }), gtrOut);
+    I.gtr = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 14 }, envelope: { attack: 0.002, decay: 0.08, sustain: 0.7, release: 0.04 } }).connect(gtrHP);
+    I.gtr.maxPolyphony = 9;
+    I.bass = new Tone.MonoSynth({ oscillator: { type: "sawtooth" }, filter: { Q: 1, type: "lowpass", rolloff: -24 },
+      envelope: { attack: 0.002, decay: 0.1, sustain: 0.5, release: 0.04 }, filterEnvelope: { attack: 0.001, decay: 0.08, sustain: 0.3, baseFrequency: 220, octaves: 2.5 } }).connect(new Tone.Distortion(0.3).connect(out));
+    I.bass.volume.value = -6;
+    const leadDelay = new Tone.FeedbackDelay({ delayTime: "8n.", feedback: 0.3, wet: 0.25 }).connect(out);
+    const leadVib = new Tone.Vibrato(6, 0.04).connect(leadDelay);
+    const leadCab = new Tone.Filter({ type: "lowpass", frequency: 5200 }).connect(leadVib);
+    I.lead = new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.003, decay: 0.1, sustain: 0.6, release: 0.05 }, portamento: 0.008 }).connect(new Tone.Distortion(0.85).connect(leadCab));
+    I.lead.volume.value = -13;
+    I.keys = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsquare", count: 2, spread: 12 }, envelope: { attack: 0.005, decay: 0.25, sustain: 0.4, release: 0.2 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 2600 }).connect(out));
+    I.keys.maxPolyphony = 8; I.keys.volume.value = -14;
+    const chIn = new Tone.Vibrato(4.8, 0.05);
+    mkFormant(chIn, VOWEL.o, new Tone.Gain(2.6).connect(out));
+    I.choir = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 16 }, envelope: { attack: 0.35, decay: 0.2, sustain: 0.9, release: 1.0 } }).connect(chIn);
+    I.choir.maxPolyphony = 8;
+    const voxOut = new Tone.Gain(4.2).connect(new Tone.Distortion(0.12).connect(new Tone.FeedbackDelay({ delayTime: "4n", feedback: 0.22, wet: 0.2 }).connect(out)));
+    const voxIn = new Tone.Vibrato(5.6, 0.09);
+    I.voxF = mkFormant(voxIn, VOWEL.a, voxOut);
+    I.vox = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 3, spread: 10 }, envelope: { attack: 0.05, decay: 0.2, sustain: 0.85, release: 0.3 }, portamento: 0.04 }).connect(voxIn);
+    return I;
+  },
+  play(I, x) {
+    const { inBar, bar, step, c, d, time, has, tight, pilot, full, solo } = x;
+    const pc = PC[c.name];
+    if (has("drums")) {
+      if (pilot) I.kick.triggerAttackRelease("D1", "32n", time, inBar % 4 === 0 ? 1 : 0.78);
+      else if (tight ? GALLOP.has(inBar) : inBar % 2 === 0) I.kick.triggerAttackRelease("D1", "32n", time, inBar % 4 === 0 ? 0.9 : 0.6);
+      if (!pilot && (inBar === 4 || inBar === 12)) { I.snare.triggerAttackRelease("16n", time, 0.9); I.snBody.triggerAttackRelease("D3", "16n", time, 0.9); }
+    }
+    if (has("rhythm")) {
+      const hit = tight ? GALLOP.has(inBar) : inBar % 4 === 0;
+      if (inBar === 0 || (tight && inBar === 8 && bar % 2 === 1)) I.gtr.triggerAttackRelease(pc, d * (tight ? 1.8 : 3.6), time, 1);
+      else if (hit) I.gtr.triggerAttackRelease(pc.slice(0, 2), 0.07, time, inBar % 4 === 0 ? 0.85 : 0.65);
+    }
+    if (has("bass") && (tight ? GALLOP.has(inBar) : (inBar === 0 || inBar === 8)))
+      I.bass.triggerAttackRelease(c.bass[0], tight ? (inBar === 0 ? d * 1.8 : 0.08) : d * 7, time, inBar % 4 === 0 ? 1 : 0.7);
+    if (has("lead") && !solo) {
+      const fillBar = bar % 4 === 3;
+      if (fillBar && tight) { const i = inBar * 2; I.lead.triggerAttackRelease(RUN[i], d * 0.45, time, 0.9); I.lead.triggerAttackRelease(RUN[i + 1], d * 0.45, time + d / 2, 0.8); }
+      else if ((pilot && !full && !fillBar) || (!tight && fillBar && inBar % 2 === 0)) {
+        const tones = [...c.arp, ...c.arp.slice(1).map(up12)];
+        I.lead.triggerAttackRelease(tones[SWEEP[inBar]], d * (tight ? 0.9 : 1.8), time, inBar % 4 === 0 ? 0.95 : 0.75);
+      }
+    }
+    if (has("keys") && (inBar === 0 || (tight && (inBar === 6 || inBar === 10)))) I.keys.triggerAttackRelease(c.pad.map(up12), inBar === 0 ? d * 3 : d * 1.2, time, 0.8);
+    if (has("choir") && inBar === 0) I.choir.triggerAttackRelease(c.choir, d * 15.5, time, tight ? 0.7 : 0.5);
+    if (has("vocals") && !solo) {
+      const v = PM_VOX.get(step);
+      if (v && (full || (pilot && step >= 64) || step === 68 || step === 104)) {
+        I.vox.triggerAttackRelease(v[1], v[2] * d * 0.95, time, full ? 0.9 : 0.7);
+        VOWEL[v[3]].forEach((f, i) => I.voxF[i].frequency.setTargetAtTime(f, time, 0.03));
+      }
+    }
+  },
+});
+
+// ---------------- Synthwave ----------------
+const SW_VOX = melody([
+  [0,"A4",6],[6,"C5",2],[8,"E5",8],[16,"D5",4],[20,"C5",4],[24,"A4",8],
+  [32,"G4",4],[36,"C5",4],[40,"E5",6],[46,"D5",2],[48,"B4",12],[60,"G4",4],
+  [64,"A4",4],[68,"E5",4],[72,"G5",8],[80,"F5",6],[86,"E5",2],[88,"C5",8],
+  [96,"E5",4],[100,"G5",4],[104,"E5",8],[112,"D5",8],[120,"B4",8],
+]);
+const SW_LEAD = melody([
+  [0,"A5",8],[8,"C6",4],[12,"E6",4],[16,"F6",8],[24,"E6",4],[28,"C6",4],
+  [32,"E6",8],[40,"G6",4],[44,"E6",4],[48,"E5",2],[50,"G5",2],[52,"B5",4],[56,"D6",4],[60,"B5",4],
+  [64,"A5",4],[68,"C6",4],[72,"E6",8],[80,"F6",4],[84,"A6",4],[88,"G6",8],
+  [96,"E6",8],[104,"C6",8],[112,"E6",4],[116,"D6",4],[120,"B5",2],[122,"G5",2],[124,"E5",4],
+]);
+const SW_ARP = [0,1,2,3,2,1,2,3,0,1,2,3,3,2,1,2];
+defineSet({
+  id: "sw", name: "Synthwave", color: "#5ee7ff", key: "N",
+  loose: "Loose: a far-off car radio", tight: "Locked in: the night drive kicks in",
+  pieces: [
+    { id: "sw-boots",     body: "legs",  covers: ["drums"], item: "Drive Boots",     member: "Drum machine",  adds: "gated-snare drums" },
+    { id: "sw-belt",      body: "waist", covers: ["bass"],  item: "Pulse Belt",      member: "Bass synth",    adds: "octave pulse bass" },
+    { id: "sw-gauntlets", body: "arms",  covers: ["arp"],   item: "Grid Gauntlets",  member: "Arpeggiator",   adds: "echoing arpeggio" },
+    { id: "sw-cape",      body: "back",  covers: ["pads"],  item: "Chrome Cape",     member: "Pad synth",     adds: "lush chorus pads" },
+    { id: "sw-visor",     body: "head",  covers: ["vox"],   item: "Neon Visor",      member: "Robot vocalist", adds: "robot “oo” vocals" },
+    { id: "sw-railgun",   hands: 2, covers: ["lead", "brass"], item: "Outrun Railgun", member: "Lead + brass synth", adds: "soaring lead and synth brass", note: "Two-handed · counts as 2" },
+    { id: "sw-blade",     hands: 1, covers: ["lead"],  item: "Neon Blade",  member: "Lead synth",  adds: "soaring lead",  note: "One-handed" },
+    { id: "sw-pistol",    hands: 1, covers: ["brass"], item: "Laser Pistol", member: "Brass synth", adds: "synth brass stabs", note: "One-handed" },
+  ],
+  wpn: {
+    "sw-railgun": '<rect x="-14" y="-4" width="22" height="9" rx="2"/><rect x="8" y="-2" width="96" height="5" rx="2"/><rect x="40" y="-7" width="30" height="4" rx="1"/><circle cx="108" cy="0.5" r="5"/>',
+    "sw-blade":   '<rect x="-6" y="0" width="12" height="4" rx="1"/><rect x="-1.5" y="4" width="3" height="58" rx="1.5"/>',
+    "sw-pistol":  '<rect x="-3" y="0" width="7" height="14" rx="2"/><rect x="-3" y="-2" width="24" height="7" rx="2"/>',
+  },
+  special: {
+    name: "Neon Overdrive", duel: "Laser duel", two: "sw-railgun", pair: ["sw-blade", "sw-pistol"], duelOffset: 0,
+    voice:  { osc: "fatsawtooth", lp: 7000, delay: "8n.", wet: 0.25, vibF: 5.5, vibD: 0.04, port: 0.03, vol: -11 },
+    voiceB: { osc: "square", lp: 4200, delay: "8n.", wet: 0.25, vibF: 5, vibD: 0.03, port: 0.02, vol: -13 },
+    // Octave glides, rolling arps, falling pairs, then 32nd shimmer and a climb
+    line(sb, c) {
+      const root = mid(c.arp[0]), tri = triOf(c), out = [];
+      if (sb === 0) { for (let i = 0; i < 16; i++) { const t = tri[(i >> 1) % 3] + 12; out.push(i % 2 ? t + 12 : t); } return { notes: out, sub: 1 }; }
+      if (sb === 1) { const t = [tri[0], tri[1], tri[2], tri[0] + 12, tri[1] + 12, tri[2] + 12, tri[0] + 24, tri[1] + 24]; for (let i = 0; i < 16; i++) out.push(t[[0,1,2,3,4,5,6,7,6,5,4,3,2,3,4,5][i]]); return { notes: out, sub: 1 }; }
+      if (sb === 2) { const top = idxOf(root + 24); for (let i = 0; i < 16; i++) out.push(sc(top - Math.floor(i / 2) - (i % 2) * 2)); return { notes: out, sub: 1 }; }
+      if (sb === 3) { for (let i = 0; i < 32; i++) out.push([tri[0] + 24, tri[1] + 24, tri[2] + 12, tri[1] + 12][i % 4]); return { notes: out, sub: 2 }; }
+      for (let i = 0; i < 32; i++) out.push(sc(idxOf(root + 12) + Math.floor(i * 8 / 31)));
+      return { notes: out, sub: 2 };
+    },
+  },
+  build(out) {
+    const I = {};
+    I.kick = new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 5, envelope: { attack: 0.001, decay: 0.3, sustain: 0 } }).connect(out);
+    const snBP = new Tone.Filter({ type: "bandpass", frequency: 1700, Q: 0.7 }).connect(out);
+    I.snare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.06, sustain: 0.45, release: 0.004 } }).connect(snBP);   // held then cut: gated-reverb feel
+    I.snBody = new Tone.MembraneSynth({ pitchDecay: 0.02, octaves: 1.2, envelope: { attack: 0.001, decay: 0.12, sustain: 0 } }).connect(out);
+    I.snBody.volume.value = -6;
+    I.hat = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.03, sustain: 0 } }).connect(new Tone.Filter({ type: "highpass", frequency: 9000 }).connect(out));
+    I.hat.volume.value = -12;
+    I.bass = new Tone.MonoSynth({ oscillator: { type: "sawtooth" }, filter: { Q: 2, type: "lowpass", rolloff: -24 },
+      envelope: { attack: 0.002, decay: 0.12, sustain: 0.4, release: 0.05 }, filterEnvelope: { attack: 0.001, decay: 0.1, sustain: 0.2, baseFrequency: 260, octaves: 2.6 } }).connect(out);
+    I.bass.volume.value = -5;
+    const pp = new Tone.PingPongDelay({ delayTime: "8n.", feedback: 0.35, wet: 0.3 }).connect(out);
+    I.arp = new Tone.Synth({ oscillator: { type: "square" }, envelope: { attack: 0.002, decay: 0.1, sustain: 0.1, release: 0.06 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 3200 }).connect(pp));
+    I.arp.volume.value = -16;
+    const chorus = new Tone.Chorus(3, 3.5, 0.6).start();
+    chorus.chain(new Tone.Filter({ type: "lowpass", frequency: 2400 }), out);
+    I.pads = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 3, spread: 40 }, envelope: { attack: 0.6, decay: 0.4, sustain: 0.8, release: 1.5 } }).connect(chorus);
+    I.pads.maxPolyphony = 10; I.pads.volume.value = -12;
+    const voxIn = new Tone.Vibrato(4.5, 0.03);
+    I.voxF = mkFormant(voxIn, VOWEL.u, new Tone.Gain(4.5).connect(new Tone.Chorus(2, 2, 0.4).start().connect(out)));
+    I.vox = new Tone.Synth({ oscillator: { type: "fatsquare", count: 2, spread: 8 }, envelope: { attack: 0.06, decay: 0.2, sustain: 0.85, release: 0.4 }, portamento: 0.05 }).connect(voxIn);
+    const leadFx = new Tone.FeedbackDelay({ delayTime: "8n.", feedback: 0.32, wet: 0.28 }).connect(out);
+    I.lead = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 2, spread: 20 }, envelope: { attack: 0.03, decay: 0.2, sustain: 0.75, release: 0.3 }, portamento: 0.05 }).connect(new Tone.Vibrato(5.5, 0.06).connect(new Tone.Filter({ type: "lowpass", frequency: 5000 }).connect(leadFx)));
+    I.lead.volume.value = -15;
+    I.brass = new Tone.PolySynth(Tone.MonoSynth, { oscillator: { type: "sawtooth" }, filter: { Q: 1, type: "lowpass" },
+      envelope: { attack: 0.02, decay: 0.25, sustain: 0.45, release: 0.2 }, filterEnvelope: { attack: 0.04, decay: 0.25, sustain: 0.35, baseFrequency: 380, octaves: 3 } }).connect(out);
+    I.brass.maxPolyphony = 8; I.brass.volume.value = -16;
+    return I;
+  },
+  play(I, x) {
+    const { inBar, bar, step, c, d, time, has, tight, pilot, full, solo, soloStart } = x;
+    if (has("drums")) {
+      if (inBar % 4 === 0 && (tight || inBar % 8 === 0)) I.kick.triggerAttackRelease("A0", "8n", time, 1);
+      if (tight ? (inBar === 4 || inBar === 12) : inBar === 8) { I.snare.triggerAttackRelease(0.24, time, tight ? 1 : 0.7); I.snBody.triggerAttackRelease("A2", "16n", time, 0.8); }
+      if (tight && (pilot ? true : inBar % 2 === 0)) I.hat.triggerAttackRelease("32n", time, inBar % 4 === 2 ? 0.8 : 0.45);
+    }
+    if (has("bass")) {
+      const r = c.bass[0], o = c.bass[1];
+      if (pilot) I.bass.triggerAttackRelease(inBar % 4 === 3 ? o : r, d * 0.8, time, inBar % 4 === 0 ? 1 : 0.7);
+      else if (tight) { if (inBar % 2 === 0) I.bass.triggerAttackRelease(inBar % 4 === 2 ? o : r, d * 1.6, time, 0.85); }
+      else if (inBar % 4 === 0) I.bass.triggerAttackRelease(r, d * 3.5, time, 0.8);
+    }
+    if (has("arp")) {
+      const tones = [...c.arp, ...c.arp.map(up12)];
+      if (tight) I.arp.triggerAttackRelease(tones[SW_ARP[inBar] + (inBar >= 8 ? 4 : 0)], d * 0.8, time, inBar % 4 === 0 ? 0.9 : 0.6);
+      else if (inBar % 2 === 0) I.arp.triggerAttackRelease(c.arp[(inBar / 2) % 4], d * 1.5, time, 0.6);
+    }
+    if (has("pads") && inBar === 0) I.pads.triggerAttackRelease(c.pad, d * 15.5, time, tight ? 0.7 : 0.5);
+    if (has("vox") && !solo) {
+      const v = SW_VOX.get(step);
+      if (v && (full || (pilot && step >= 64) || step === 8 || step === 72)) I.vox.triggerAttackRelease(v[1], v[2] * d * 0.95, time, full ? 0.9 : 0.7);
+    }
+    if (has("lead") && !solo) {
+      const v = SW_LEAD.get(step), answer = bar % 4 === 3;
+      if (v && (answer || (tight && !full))) I.lead.triggerAttackRelease(v[1], v[2] * d * 0.95, time, 0.8);
+    }
+    if (has("brass")) {
+      const hit = inBar === 0 || (tight && (inBar === 6 || inBar === 10));
+      if (hit) I.brass.triggerAttackRelease(c.pad.map(up12), inBar === 0 ? d * 3 : d * 1.5, time, inBar === 0 ? 0.9 : 0.75);
+    }
+    if (soloStart && !(has("drums") && tight)) I.snare.triggerAttackRelease(0.3, time, 1);
+  },
+});
+
+// ---------------- Orchestral ----------------
+const OR_SOP = melody([
+  [0,"E5",8],[8,"A5",8],[16,"A5",4],[20,"G5",4],[24,"F5",8],
+  [32,"E5",4],[36,"G5",4],[40,"C6",8],[48,"B5",8],[56,"G5",8],
+  [64,"A5",12],[76,"B5",4],[80,"C6",8],[88,"A5",8],
+  [96,"G5",4],[100,"E5",4],[104,"C6",8],[112,"B5",8],[120,"G5",4],[124,"E5",4],
+]);
+const OR_VLN = melody([
+  [0,"A4",2],[2,"C5",2],[4,"E5",2],[6,"A5",2],[8,"G5",4],[12,"E5",4],
+  [16,"F5",2],[18,"A5",2],[20,"C6",4],[24,"A5",4],[28,"F5",4],
+  [32,"G5",2],[34,"E5",2],[36,"C5",2],[38,"E5",2],[40,"G5",4],[44,"C6",4],
+  [48,"B5",4],[52,"A5",2],[54,"G5",2],[56,"D5",8],
+]);
+const CELLO = { Am: ["A2","C3"], F: ["F2","A2"], C: ["C3","E3"], G: ["G2","B2"] };
+defineSet({
+  id: "or", name: "Orchestral", color: "#f2c46d", key: "O",
+  loose: "Loose: an orchestra tuning up in the distance", tight: "Locked in: the full orchestra plays as one",
+  pieces: [
+    { id: "or-greaves",   body: "legs",  covers: ["perc"],    item: "Marching Greaves",   member: "Percussion",  adds: "march drums and cymbals" },
+    { id: "or-sash",      body: "waist", covers: ["timp"],    item: "Timpani Sash",       member: "Timpanist",   adds: "timpani" },
+    { id: "or-vambraces", body: "arms",  covers: ["strings"], item: "Spiccato Vambraces", member: "String section", adds: "spiccato strings" },
+    { id: "or-mantle",    body: "back",  covers: ["horns"],   item: "Horn Mantle",        member: "Horn section", adds: "French horns" },
+    { id: "or-crown",     body: "head",  covers: ["soprano"], item: "Maestro Crown",      member: "Soprano",     adds: "soprano “ah”" },
+    { id: "or-greatbow",  hands: 2, covers: ["violin", "cello"], item: "Virtuoso Greatbow", member: "Solo violin + cello", adds: "violin melody and cello line", note: "Two-handed · counts as 2" },
+    { id: "or-rapier",    hands: 1, covers: ["violin"], item: "Violin Rapier", member: "Solo violin", adds: "violin melody", note: "One-handed" },
+    { id: "or-saber",     hands: 1, covers: ["cello"],  item: "Cello Saber",   member: "Solo cello",  adds: "cello line",    note: "One-handed" },
+  ],
+  wpn: {
+    "or-greatbow": '<path d="M-6 -30 Q46 10 -6 50" fill="none"/><rect x="-8" y="-2" width="112" height="3" rx="1"/><polygon points="100,-6 122,0 100,6"/>',
+    "or-rapier":   '<circle cx="0" cy="2" r="5"/><rect x="-1" y="6" width="2" height="60" rx="1"/>',
+    "or-saber":    '<rect x="-7" y="0" width="14" height="4" rx="1"/><path d="M0 4 Q10 30 2 58" fill="none"/>',
+  },
+  special: {
+    name: "Grand Finale", duel: "Virtuoso duet", two: "or-greatbow", pair: ["or-rapier", "or-saber"], duelOffset: -12,
+    voice:  { osc: "sawtooth", lp: 4800, delay: "16n", wet: 0.12, vibF: 6, vibD: 0.05, env: { attack: 0.01, decay: 0.1, sustain: 0.75, release: 0.08 }, vol: -10 },
+    voiceB: { osc: "sawtooth", lp: 2400, delay: "16n", wet: 0.12, vibF: 5.2, vibD: 0.05, env: { attack: 0.015, decay: 0.1, sustain: 0.8, release: 0.1 }, vol: -8 },
+    // A caprice: broken thirds, string-crossing arpeggios, a falling scale, a trill, a climb
+    line(sb, c) {
+      const root = mid(c.arp[0]), tri = triOf(c), out = [];
+      for (let i = 0; i < 32; i++) {
+        if (sb === 0) { const b = idxOf(root) + Math.floor(i / 2); out.push(sc(i % 2 ? b + 2 : b)); }
+        else if (sb === 1) { const t = [tri[0], tri[2], tri[1] + 12, tri[2] + 12]; out.push(t[[0,1,2,3,2,1][i % 6]] + (i >= 16 ? 12 : 0)); }
+        else if (sb === 2) out.push(sc(idxOf(root + 24) - i));
+        else if (sb === 3) { const top = idxOf(tri[2] + 12); out.push(sc(i % 2 ? top + 1 : top)); }
+        else out.push(sc(idxOf(root) + Math.floor(i * 14 / 31)));
+      }
+      return { notes: out, sub: 2 };
+    },
+  },
+  build(out) {
+    const I = {};
+    I.bd = new Tone.MembraneSynth({ pitchDecay: 0.1, octaves: 2, envelope: { attack: 0.002, decay: 0.9, sustain: 0 } }).connect(out);
+    I.snare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.11, sustain: 0 } }).connect(new Tone.Filter({ type: "bandpass", frequency: 3200, Q: 0.8 }).connect(out));
+    I.snare.volume.value = -6;
+    I.cym = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.003, decay: 2.2, sustain: 0 } }).connect(new Tone.Filter({ type: "highpass", frequency: 5500 }).connect(out));
+    I.cym.volume.value = -12;
+    I.timp = new Tone.MembraneSynth({ pitchDecay: 0.04, octaves: 1.2, envelope: { attack: 0.002, decay: 1.4, sustain: 0 } }).connect(out);
+    I.timp.volume.value = -2;
+    I.str = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 3, spread: 20 }, envelope: { attack: 0.005, decay: 0.09, sustain: 0.1, release: 0.08 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 3000 }).connect(out));
+    I.str.maxPolyphony = 6; I.str.volume.value = -12;
+    I.horns = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 10 }, envelope: { attack: 0.15, decay: 0.3, sustain: 0.8, release: 0.6 } }).connect(new Tone.Filter({ type: "lowpass", frequency: 1100 }).connect(out));
+    I.horns.maxPolyphony = 8; I.horns.volume.value = -8;
+    const sopIn = new Tone.Vibrato(5.6, 0.12);
+    I.sopF = mkFormant(sopIn, VOWEL.sop, new Tone.Gain(4).connect(new Tone.FeedbackDelay({ delayTime: "4n", feedback: 0.2, wet: 0.18 }).connect(out)));
+    I.sop = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 2, spread: 8 }, envelope: { attack: 0.12, decay: 0.2, sustain: 0.85, release: 0.5 }, portamento: 0.05 }).connect(sopIn);
+    I.vln = new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.08, decay: 0.1, sustain: 0.8, release: 0.2 }, portamento: 0.02 })
+      .connect(new Tone.Filter({ type: "lowpass", frequency: 3800 }).connect(new Tone.Vibrato(5.8, 0.06).connect(out)));
+    I.vln.volume.value = -13;
+    I.cello = new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.12, decay: 0.2, sustain: 0.85, release: 0.3 } })
+      .connect(new Tone.Filter({ type: "lowpass", frequency: 1500 }).connect(new Tone.Vibrato(5, 0.05).connect(out)));
+    I.cello.volume.value = -8;
+    return I;
+  },
+  play(I, x) {
+    const { inBar, bar, step, c, d, time, has, tight, pilot, full, solo, soloStart } = x;
+    if (has("perc")) {
+      if (inBar === 0 || (tight && inBar === 8)) I.bd.triggerAttackRelease("C1", "4n", time, inBar === 0 ? 1 : 0.7);
+      if (tight && [4, 6, 7, 12, 14, 15].includes(inBar)) I.snare.triggerAttackRelease("32n", time, [7, 15].includes(inBar) ? 0.5 : 0.85);
+      if (pilot && bar % 4 === 3 && inBar >= 12) I.snare.triggerAttackRelease("32n", time + d / 2, 0.6);
+      if (inBar === 0 && (bar % 4 === 0 || soloStart) && (tight || soloStart)) I.cym.triggerAttackRelease("1n", time, 1);
+    }
+    if (has("timp")) {
+      const n = up12(c.bass[0]);
+      if (inBar === 0) I.timp.triggerAttackRelease(n, "2n", time, 1);
+      if (tight && inBar === 8) I.timp.triggerAttackRelease(up12(c.bass[2]), "4n", time, 0.8);
+      if (tight && bar % 4 === 3 && inBar >= 12) { I.timp.triggerAttackRelease(n, "32n", time, 0.5 + (inBar - 12) * 0.12); }
+    }
+    if (has("strings")) {
+      const t = [c.pad[0], c.pad[1], c.pad[2], c.pad[1]];
+      if (tight || inBar % 2 === 0) I.str.triggerAttackRelease(t[(tight ? inBar : inBar / 2) % 4], d * 0.6, time, inBar % 4 === 0 ? 0.9 : 0.6);
+    }
+    if (has("horns")) {
+      if (tight) { if (inBar === 0) I.horns.triggerAttackRelease(c.pad, d * 5.5, time, 0.85); else if (inBar === 6) I.horns.triggerAttackRelease(c.pad, d * 1.8, time, 0.7); else if (inBar === 8) I.horns.triggerAttackRelease(c.pad, d * 7.5, time, 0.8); }
+      else if (inBar === 0) I.horns.triggerAttackRelease(c.pad, d * 15, time, 0.6);
+    }
+    if (has("soprano") && !solo) {
+      const v = OR_SOP.get(step);
+      if (v && (full || (pilot && step >= 64) || step === 64 || step === 104)) I.sop.triggerAttackRelease(v[1], v[2] * d * 0.95, time, full ? 0.9 : 0.7);
+    }
+    if (has("violin") && !solo) {
+      const v = OR_VLN.get(step % 64);
+      if (v && (bar % 4 === 3 || (tight && !full))) I.vln.triggerAttackRelease(v[1], v[2] * d * 0.95, time, 0.8);
+    }
+    if (has("cello") && !solo) {
+      const ce = CELLO[c.name];
+      if (inBar === 0) I.cello.triggerAttackRelease(ce[0], d * (tight ? 7.5 : 15.5), time, 0.8);
+      else if (tight && inBar === 8) I.cello.triggerAttackRelease(ce[1], d * 7.5, time, 0.75);
+    }
+  },
+});
+const STEMS = [];
+let nodes = null;      // audio graph, built on first Play
+let counter = 0;
+
+function def(o) { STEMS.push(Object.assign({ wanted: false, dropped: false, gate: false, order: 0, state: "off" }, o)); }
+
+def({ id: "beat", key: "0", power: "Base beat", layer: "EDM kick and hi-hats", slot: "BEAT", color: "#ffd166", db: -2, send: 0, base: true,
+      fx: "Sets the attack tempo. On from the first second of a run." });
+def({ id: "flute", key: "1", power: "Sword", layer: "Flute melody", slot: "LEAD", color: "#7ef0c8", db: -9, send: .35,
+      fx: "Extra slash that fires homing notes." });
+def({ id: "drop", key: "2", power: "Plasma Blade", layer: "Dubstep wobble and half-time snare", slot: "DROP", color: "#b18cff", db: -10, send: .05,
+      fx: "Shockwave on every drop." });
+def({ id: "taiko", key: "3", power: "War Hammer", layer: "Taiko drums", slot: "PERC", color: "#ff9b54", db: -5, send: .25,
+      fx: "Ground slam on the downbeat." });
+def({ id: "arp", key: "4", power: "Lightning Rune", layer: "Synth arpeggio", slot: "ARP", color: "#3dd6ff", db: -17, send: .2, pump: true,
+      fx: "Chain lightning on every eighth note." });
+def({ id: "pads", key: "5", power: "Guardian Shield", layer: "Shield gong", slot: "GONG", color: "#8fb4ff", db: -9, send: .45,
+      fx: "Damage shield that refreshes each bar." });
+def({ id: "funk", key: "6", power: "Twin Daggers", layer: "Funk bass", slot: "BASS", color: "#ff6fd8", db: -11, send: 0, pump: true,
+      fx: "Fast double hits." });
+def({ id: "choir", key: "7", power: "Heart Charm", layer: "Choir “ahh”", slot: "CHOIR", color: "#ffe3a3", db: -12, send: .5, pump: true,
+      fx: "Healing over time." });
+def({ id: "strings", key: "8", power: "Comet Bow", layer: "String ostinato", slot: "STRINGS", color: "#c3f06b", db: -18, send: .3, pump: true,
+      fx: "Piercing arrows." });
+def({ id: "rock", key: "P", power: "Pilot mode", layer: "Rock drum kit", slot: "PILOT", color: "#ff5c8a", db: -4, send: .12, pilot: true,
+      fx: "Plays while you hold manual control." });
+
+const byId = id => STEMS.find(s => s.id === id);
+const layers = () => STEMS.filter(s => !s.base && !s.pilot);
+function build() {
+  const master = new Tone.Volume(-6);
+  const comp = new Tone.Compressor({ threshold: -16, ratio: 3, attack: 0.01, release: 0.2 });
+  const limiter = new Tone.Limiter(-1);
+  const meter = new Tone.Meter({ smoothing: 0.6 });
+  const slowLP = new Tone.Filter({ type: "lowpass", frequency: 20000, rolloff: -24 });
+  master.chain(slowLP, comp, limiter, Tone.Destination);
+  limiter.connect(meter);
+  const reverb = new Tone.Reverb({ decay: 2.8, preDelay: 0.02, wet: 1 }).connect(master);
+  const duckBus = new Tone.Gain(1).connect(master);   // other layers duck under the full-set bonus
+  const beatBus = new Tone.Gain(1).connect(master);   // EDM beat steps aside for the full-set bonus
+  const pumpBus = new Tone.Gain(1).connect(duckBus);
+
+  for (const s of STEMS) {
+    s.fader = new Tone.Gain(s.wanted ? 1 : 0);
+    s.vol = new Tone.Volume(s.db);
+    s.fader.connect(s.vol);
+    s.vol.connect(s.pump ? pumpBus : s.base ? beatBus : s.pilot ? master : duckBus);
+    if (s.send) { s.sendG = new Tone.Gain(s.send); s.vol.connect(s.sendG); s.sendG.connect(reverb); }
+    s.gate = s.wanted;
+  }
+  const F = id => byId(id).fader;
+  const n = { master, meter, reverb, pumpBus, duckBus, beatBus, slowLP };
+  // Shred special: riser for the slow-motion windup, two solo guitars for the solo or the duel
+  const riserBP = new Tone.Filter({ type: "bandpass", frequency: 400, Q: 2 }).connect(comp);
+  n.riserBP = riserBP;
+  n.riser = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 1, decay: 0.05, sustain: 1, release: 0.1 } }).connect(riserBP);
+  n.riser.volume.value = -14;
+  // Gear sets: one bus per set (cohesion gain + muffle filter), instruments built by each set
+  for (const id in SETS) {
+    const bus = new Tone.Gain(0.45), lp = new Tone.Filter({ type: "lowpass", frequency: 2600, rolloff: -12 });
+    bus.chain(lp, new Tone.Volume(-4), master);
+    const I = SETS[id].build(bus);
+    I.solo = [mkVoice(master, SETS[id].special.voice), mkVoice(master, SETS[id].special.voiceB)];
+    RT[id] = { bus, lp, I };
+    wrapSet(id, I);
+  }
+
+  // Base beat
+  n.kick = new Tone.MembraneSynth({ pitchDecay: 0.03, octaves: 6, oscillator: { type: "sine" }, envelope: { attack: 0.001, decay: 0.38, sustain: 0, release: 0.05 } }).connect(F("beat"));
+  const hatHP = new Tone.Filter({ type: "highpass", frequency: 8000 }).connect(F("beat"));
+  n.hat = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.035, sustain: 0 } }).connect(hatHP);
+  n.ohat = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.002, decay: 0.16, sustain: 0 } }).connect(hatHP);
+  n.hat.volume.value = -8; n.ohat.volume.value = -9;
+
+  // Flute (Sword)
+  const vib = new Tone.Vibrato(5.2, 0.07).connect(F("flute"));
+  n.flute = new Tone.Synth({ oscillator: { type: "custom", partials: [1, 0.32, 0.12, 0.05, 0.02] }, envelope: { attack: 0.04, decay: 0.15, sustain: 0.75, release: 0.18 }, portamento: 0.012 }).connect(vib);
+  const breathBP = new Tone.Filter({ type: "bandpass", frequency: 2400, Q: 1.1 }).connect(F("flute"));
+  n.breath = new Tone.NoiseSynth({ noise: { type: "pink" }, envelope: { attack: 0.005, decay: 0.09, sustain: 0.05, release: 0.05 } }).connect(breathBP);
+  n.breath.volume.value = -20;
+
+  // Dubstep drop (Plasma Blade)
+  n.wobF = new Tone.Filter({ type: "lowpass", frequency: 200, Q: 7, rolloff: -24 });
+  const dist = new Tone.Distortion(0.45);
+  n.wobF.chain(dist, F("drop"));
+  n.wob = new Tone.Synth({ oscillator: { type: "fatsawtooth", count: 3, spread: 28 }, envelope: { attack: 0.005, decay: 0.05, sustain: 1, release: 0.06 } }).connect(n.wobF);
+  n.wob.volume.value = -4;
+  n.sub = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.005, decay: 0.05, sustain: 1, release: 0.06 } }).connect(F("drop"));
+  n.sub.volume.value = -5;
+  const snHP = new Tone.Filter({ type: "highpass", frequency: 900 }).connect(F("drop"));
+  n.dsnare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.22, sustain: 0 } }).connect(snHP);
+  n.dsnBody = new Tone.MembraneSynth({ pitchDecay: 0.02, octaves: 2, envelope: { attack: 0.001, decay: 0.12, sustain: 0 } }).connect(F("drop"));
+  n.dsnBody.volume.value = -4;
+
+  // Taiko (War Hammer)
+  n.taiko = new Tone.MembraneSynth({ pitchDecay: 0.08, octaves: 2.5, envelope: { attack: 0.002, decay: 0.7, sustain: 0, release: 0.3 } }).connect(F("taiko"));
+  n.rim = new Tone.MembraneSynth({ pitchDecay: 0.01, octaves: 1.5, envelope: { attack: 0.001, decay: 0.08, sustain: 0 } }).connect(F("taiko"));
+  n.rim.volume.value = -10;
+
+  // Arp (Lightning Rune)
+  const arpDelay = new Tone.FeedbackDelay({ delayTime: "8n.", feedback: 0.28, wet: 0.22 }).connect(F("arp"));
+  n.arp = new Tone.MonoSynth({ oscillator: { type: "sawtooth" }, filter: { Q: 3, type: "lowpass", rolloff: -24 },
+    envelope: { attack: 0.002, decay: 0.14, sustain: 0.15, release: 0.08 },
+    filterEnvelope: { attack: 0.001, decay: 0.12, sustain: 0.1, baseFrequency: 700, octaves: 3 } }).connect(arpDelay);
+
+  // Pads (Guardian Shield)
+  const padLP = new Tone.Filter({ type: "lowpass", frequency: 1500 }).connect(F("pads"));
+  n.pads = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 3, spread: 30 }, envelope: { attack: 0.3, decay: 0.3, sustain: 0.8, release: 1.2 } }).connect(padLP);
+  n.pads.maxPolyphony = 12; n.pads.volume.value = -8;
+  // Gong (Guardian Shield): inharmonic FM strike, a higher shimmer partial and a soft mallet thump
+  const gongLP = new Tone.Filter({ type: "lowpass", frequency: 5200 }).connect(F("pads"));
+  n.gong = new Tone.FMSynth({ harmonicity: 1.41, modulationIndex: 9, oscillator: { type: "sine" }, modulation: { type: "sine" },
+    envelope: { attack: 0.003, decay: 4, sustain: 0, release: 2 }, modulationEnvelope: { attack: 0.003, decay: 1.6, sustain: 0.15, release: 1.5 } }).connect(gongLP);
+  n.gong2 = new Tone.FMSynth({ harmonicity: 2.76, modulationIndex: 5, envelope: { attack: 0.004, decay: 2.6, sustain: 0, release: 1.5 },
+    modulationEnvelope: { attack: 0.004, decay: 1, sustain: 0.1, release: 1 } }).connect(gongLP);
+  n.gong2.volume.value = -9;
+  n.mallet = new Tone.MembraneSynth({ pitchDecay: 0.06, octaves: 2, envelope: { attack: 0.002, decay: 0.5, sustain: 0 } }).connect(F("pads"));
+  n.mallet.volume.value = -8;
+
+  // Funk bass (Twin Daggers)
+  n.funk = new Tone.MonoSynth({ oscillator: { type: "sawtooth" }, filter: { Q: 2, type: "lowpass", rolloff: -24 },
+    envelope: { attack: 0.003, decay: 0.22, sustain: 0.35, release: 0.06 },
+    filterEnvelope: { attack: 0.002, decay: 0.14, sustain: 0.25, baseFrequency: 160, octaves: 3.6 } }).connect(F("funk"));
+
+  // Choir (Heart Charm): saw voices through "ah" formant filters
+  const formSum = new Tone.Gain(3.2).connect(F("choir"));
+  const voxVib = new Tone.Vibrato(4.6, 0.05);
+  [[800, 6, 1], [1150, 7, 0.55], [2900, 9, 0.22]].forEach(([f, q, g]) => {
+    const bp = new Tone.Filter({ type: "bandpass", frequency: f, Q: q });
+    const gg = new Tone.Gain(g);
+    voxVib.connect(bp); bp.connect(gg); gg.connect(formSum);
+  });
+  n.choir = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 2, spread: 14 }, envelope: { attack: 0.45, decay: 0.2, sustain: 0.9, release: 1.4 } }).connect(voxVib);
+  n.choir.maxPolyphony = 10;
+
+  // Strings (Comet Bow)
+  const strLP = new Tone.Filter({ type: "lowpass", frequency: 2600 }).connect(F("strings"));
+  n.str = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "fatsawtooth", count: 3, spread: 18 }, envelope: { attack: 0.012, decay: 0.16, sustain: 0.35, release: 0.14 } }).connect(strLP);
+  n.str.maxPolyphony = 6;
+
+  // Rock kit (Pilot)
+  n.rkick = new Tone.MembraneSynth({ pitchDecay: 0.025, octaves: 4, envelope: { attack: 0.001, decay: 0.26, sustain: 0 } }).connect(F("rock"));
+  const rsHP = new Tone.Filter({ type: "highpass", frequency: 1400 }).connect(F("rock"));
+  n.rsnare = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.17, sustain: 0 } }).connect(rsHP);
+  n.rsnBody = new Tone.MembraneSynth({ pitchDecay: 0.015, octaves: 1.5, envelope: { attack: 0.001, decay: 0.1, sustain: 0 } }).connect(F("rock"));
+  n.rsnBody.volume.value = -3;
+  const rhHP = new Tone.Filter({ type: "highpass", frequency: 9000 }).connect(F("rock"));
+  n.rhat = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.045, sustain: 0 } }).connect(rhHP);
+  n.rhat.volume.value = -6;
+  const crHP = new Tone.Filter({ type: "highpass", frequency: 4500 }).connect(F("rock"));
+  n.crash = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.002, decay: 1.6, sustain: 0 } }).connect(crHP);
+  n.crash.volume.value = -9;
+
+  // Hit sound effect (not a layer)
+  const hitBP = new Tone.Filter({ type: "bandpass", frequency: 1800, Q: 0.8 }).connect(master);
+  n.hitfx = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.001, decay: 0.25, sustain: 0 } }).connect(hitBP);
+  n.hitfx.volume.value = -6;
+
+  n.loop = new Tone.Loop(tick, "16n").start(0);
+  return n;
+}
+
+// =====================================================================
+// Sequencer (Sound Lab v6 clock) with gameplay hooks.
+// Every weapon fires on its own layer's notes, and each layer's part gets
+// busier as it levels up: Lv 1 is a simple tune, Lv 3 is the full part.
+// =====================================================================
+let pilotCrash = false;
+let recoverBar = -1;
+let baseBpm = 128;
+let windupEnd = 0;
+let specialPending = false, specialPhase = null, specialBar = -1, specialCrash = false, mixLoud = false, specialAbort = false;
+let specialSet = null, specialMode = "solo";
+let cooldownUntil = 0, invulnUntil = 0;
+const INVULN = 10000;
+let playing = false;
+const LV = id => (run && run.lv.get(id)) || 1;
+
+function tick(time) {
+  const ticks = Tone.Transport.getTicksAtTime(time);
+  const abs = Math.round(ticks / (Tone.Transport.PPQ / 4));
+  const step = abs % STEPS;
+  const absBar = Math.floor(abs / BAR);
+  const inBar = step % BAR;
+  const bar = Math.floor(step / BAR);
+  const c = chordAt(step);
+  const d = s16();
+  const n = nodes;
+  const E = (type, a) => Tone.Draw.schedule(() => onMusic(type, a), time);
+
+  if (inBar === 0 && recoverBar >= 0 && absBar >= recoverBar) recoverAll(time);
+  ambTick(time, inBar);
+
+  if (inBar === 0) {
+    pilotNow = byId("rock").wanted;
+    for (const id in SETS) setNow[id] = membersOf(id);
+    specialBarLine(time, absBar);
+    const full = Object.keys(SETS).find(id => setNow[id].size === SET_SIZE && pilotNow) || null;
+    if (full !== fullSet) { fullSet = full; if (full) setEntry = true; }
+    const loudSet = full || (specialPhase === "solo" ? specialSet : null);
+    if (!!loudSet !== mixLoud) {
+      mixLoud = !!loudSet;
+      ramp(n.duckBus.gain, mixLoud ? 0.32 : 1, time, mixLoud ? 0.03 : 0.25, time);
+      ramp(n.beatBus.gain, mixLoud ? 0 : 1, time, mixLoud ? 0.03 : 0.25, time);
+    }
+    for (const id in SETS) {
+      const r = RT[id], coh = setNow[id].size / SET_SIZE, loud = id === loudSet;
+      let g = loud ? 1.7 : pilotNow ? 0.85 + 0.15 * coh : 0.6 + 0.25 * coh;
+      if (loudSet && !loud) g *= 0.35;
+      const lp = loud ? 16000 : pilotNow ? 9000 : 1800 + 3200 * coh;
+      ramp(r.bus.gain, g, time, 0.03, time);
+      r.lp.frequency.cancelScheduledValues(time); r.lp.frequency.setValueAtTime(r.lp.frequency.getValueAtTime(time), time); r.lp.frequency.exponentialRampToValueAtTime(lp, time + 0.05);
+    }
+    E("bar", { absBar });
+  }
+  if (inBar % 4 === 0) E("beat", { inBar, absBar, step });
+
+  if (inBar % 4 === 0) {
+    const p = n.pumpBus.gain; const b = beatSec();
+    p.setValueAtTime(1, time); p.linearRampToValueAtTime(0.42, time + 0.012); p.linearRampToValueAtTime(1, time + b * 0.62);
+  }
+
+  const on = id => byId(id).gate;
+
+  if (on("beat")) {
+    if (inBar % 4 === 0) { n.kick.triggerAttackRelease("C1", "8n", time, 1); E("kick"); }
+    if (inBar % 4 === 2) n.ohat.triggerAttackRelease("16n", time, 0.6);
+    else n.hat.triggerAttackRelease("32n", time, inBar % 2 ? 0.35 : 0.55);
+  }
+  // Sword: Lv1 one note per half bar, Lv2 one per beat, Lv3 the full flute melody
+  if (on("flute")) {
+    const lv = LV("flute"), m = MEL.get(step), grid = lv === 1 ? 8 : lv === 2 ? 4 : 1;
+    if (m && step % grid === 0) {
+      const len = lv === 3 ? m[2] : Math.max(m[2], grid);
+      n.flute.triggerAttackRelease(m[1], len * d * 0.92, time, 0.85); n.breath.triggerAttackRelease(0.06, time, 0.8); E("flute");
+    }
+  }
+  // Plasma Blade: Lv1 one slow wub per beat, Lv2 two drops a bar + snare, Lv3 the full rhythmic wobble
+  if (on("drop")) {
+    const lv = LV("drop");
+    const starts = lv === 1 ? { 0: 15.6 } : { 0: 7.6, 10: 5.6 };
+    if (starts[inBar]) { n.wob.triggerAttackRelease(c.wob, d * starts[inBar], time); n.sub.triggerAttackRelease(c.wob, d * starts[inBar], time); E("drop", { big: true }); }
+    if (inBar % 4 === 0) {
+      const full = WOB_RATES[bar % 4][inBar / 4];
+      const rate = lv === 1 ? 1 : lv === 2 ? Math.min(full, 2) : full;
+      const f = n.wobF.frequency; const per = beatSec() / rate;
+      f.cancelScheduledValues(time); f.setValueAtTime(110, time);
+      for (let i = 0; i < rate; i++) { f.exponentialRampToValueAtTime(lv === 1 ? 1200 : 2400, time + per * (i + 0.5)); f.exponentialRampToValueAtTime(110, time + per * (i + 1)); }
+    }
+    if (lv >= 2 && inBar === 8) { n.dsnare.triggerAttackRelease("8n", time, 1); n.dsnBody.triggerAttackRelease("G2", "16n", time, 1); E("drop", { big: false }); }
+  }
+  // War Hammer: Lv1 beats 1 and 3, Lv2 adds the off hits and rims, Lv3 the full taiko groove
+  if (on("taiko")) {
+    const lv = LV("taiko"), t = TAIKO.get(step % 32);
+    if (t && (lv >= 3 || (lv === 2 ? t[0] >= 0.6 : (!t[1] && t[0] >= 0.8)))) {
+      if (t[1]) n.rim.triggerAttackRelease("E3", "32n", time, t[0]);
+      else { n.taiko.triggerAttackRelease("D2", "4n", time, t[0]); E("taiko", { v: t[0] }); }
+    }
+  }
+  // Lightning Rune: Lv1 quarter-note chord tones, Lv2 eighths, Lv3 the full 16th arpeggio
+  if (on("arp")) {
+    const lv = LV("arp");
+    if (lv === 1 && inBar % 4 === 0) { n.arp.triggerAttackRelease(c.arp[inBar / 4], d * 3, time, 0.85); E("arp"); }
+    else if (lv === 2 && inBar % 2 === 0) { n.arp.triggerAttackRelease(c.arp[ARP_ORDER[(inBar / 2) % 8]], d * 1.7, time, inBar % 4 === 0 ? 0.9 : 0.65); E("arp"); }
+    else if (lv === 3) { n.arp.triggerAttackRelease(c.arp[ARP_ORDER[inBar % 8]], d * 0.9, time, inBar % 4 === 0 ? 0.9 : 0.6); if (inBar % 2 === 0) E("arp"); }
+  }
+  // Guardian Shield: a gong that makes the Rig invulnerable when it rings.
+  // Lv1 every other bar for 1 s, Lv2 every bar, Lv3 every bar for 1.6 s with warm pads under it
+  if (on("pads")) {
+    const lv = LV("pads");
+    if (inBar === 0 && absBar % (lv === 1 ? 2 : 1) === 0) {
+      n.gong.triggerAttackRelease(c.bass[1], 3.5, time, 0.9);
+      n.gong2.triggerAttackRelease(up12(c.bass[1]), 2.5, time, 0.6);
+      n.mallet.triggerAttackRelease(c.bass[0], "8n", time, 0.9);
+      E("gong", { dur: lv >= 3 ? 1600 : 1000 });
+    }
+    if (lv >= 3 && inBar === 0) n.pads.triggerAttackRelease(c.pad, d * 15.5, time, 0.4);
+  }
+  // Twin Daggers: Lv1 roots on beats 1 and 3, Lv2 syncopated stabs, Lv3 the full funk line
+  if (on("funk")) {
+    const lv = LV("funk");
+    if (lv === 1) { if (inBar === 0 || inBar === 8) { n.funk.triggerAttackRelease(c.bass[0], d * 2.5, time, 0.9); E("funk"); } }
+    else { const fb = FUNK.get(inBar); if (fb && (lv === 3 || fb[2] >= 0.75)) { n.funk.triggerAttackRelease(c.bass[fb[0]], fb[1] * d * 0.85, time, fb[2]); E("funk"); } }
+  }
+  // Heart Charm: Lv1 one voice, Lv2 two-part harmony, Lv3 the full choir chord
+  if (on("choir") && inBar === 0) {
+    const lv = LV("choir"), notes = lv === 1 ? [c.choir[1]] : lv === 2 ? [c.choir[0], c.choir[1]] : c.choir;
+    n.choir.triggerAttackRelease(notes, d * 15.5, time, 0.6); E("choir");
+  }
+  // Comet Bow: Lv1 quarter notes, Lv2 the eighth-note ostinato, Lv3 adds 16th pickups
+  if (on("strings")) {
+    const lv = LV("strings");
+    if (lv === 1 && inBar % 4 === 0) { n.str.triggerAttackRelease(c.str[(inBar / 4) % 4], d * 3, time, 0.75); E("strings", { k: inBar / 4 }); }
+    else if (lv >= 2 && inBar % 2 === 0) { n.str.triggerAttackRelease(c.str[(inBar / 2) % 4], d * 1.6, time, inBar % 8 === 0 ? 0.8 : 0.6); E("strings", { k: inBar / 2 }); }
+    else if (lv === 3 && inBar % 4 === 3) { n.str.triggerAttackRelease(c.str[((inBar + 1) / 2) % 4], d * 0.7, time, 0.5); E("strings", { k: inBar }); }
+  }
+  // Pilot rock kit
+  const fill = bar === 7 && inBar >= 12;
+  if (on("rock")) {
+    if (!(pilotNow && setNow.pm && setNow.pm.has("drums")) && [0, 8, 10].includes(inBar)) n.rkick.triggerAttackRelease("E1", "8n", time, inBar === 10 ? 0.75 : 1);
+    if (fill) { n.rsnare.triggerAttackRelease("32n", time, 0.5 + (inBar - 12) * 0.15); n.rsnBody.triggerAttackRelease("D3", "32n", time, 0.6); }
+    else if (inBar === 4 || inBar === 12) { n.rsnare.triggerAttackRelease("16n", time, 1); n.rsnBody.triggerAttackRelease("D3", "16n", time, 1); E("snare"); }
+    if (inBar % 2 === 0 && !fill) {
+      const crashNow = inBar === 0 && (pilotCrash || setEntry || specialCrash || step === 0 || step === 64 || (fullSet && bar % 2 === 0));
+      if (crashNow) { n.crash.triggerAttackRelease("2n", time, 1); pilotCrash = false; setEntry = false; specialCrash = false; }
+      else n.rhat.triggerAttackRelease("32n", time, inBar % 4 === 0 ? 0.8 : 0.5);
+    }
+  }
+  // Gear sets: every equipped piece plays its member (instrument calls are wrapped to fire gear attacks)
+  const soloSet = specialPhase === "solo" ? specialSet : null;
+  if (soloSet) playSolo(step, inBar, absBar, c, d, time, E);
+  for (const id in SETS) {
+    const m = setNow[id];
+    if (!m || !m.size) continue;
+    SETS[id].play(RT[id].I, { step, inBar, bar, absBar, c, d, time, has: q => m.has(q),
+      tight: pilotNow || m.size >= 4 || soloSet === id, pilot: pilotNow, full: fullSet === id,
+      solo: soloSet === id, soloStart: soloSet === id && absBar === specialBar && inBar === 0 });
+  }
+  Tone.Draw.schedule(() => drawClock(step), time);
+}
+// Wrap each set instrument so every note it plays also fires that piece's attack at the same moment
+function wrapSet(setId, I) {
+  for (const k of Object.keys(I)) {
+    const inst = I[k];
+    if (k === "solo" || !inst || typeof inst.triggerAttackRelease !== "function") continue;
+    const orig = inst.triggerAttackRelease.bind(inst), ti = inst instanceof Tone.NoiseSynth ? 1 : 2;
+    inst.triggerAttackRelease = (...args) => { const r = orig(...args); const t = args[ti]; Tone.Draw.schedule(() => onGear(setId, k), typeof t === "number" ? t : Tone.now()); return r; };
+  }
+}
+
+// ---------- Set specials (Sound Lab v6 logic) ----------
+const cooldownMs = () => (run && (run.type === "boss" || run.type === "mini")) ? 45000 : 30000;
+function readySet() {
+  return Object.keys(SETS).find(id => { const sp = SETS[id].special; return membersOf(id).size === SET_SIZE && (equipped.has(sp.two) || sp.pair.every(p => equipped.has(p))); }) || null;
+}
+const specialLabel = id => id ? (equipped.has(SETS[id].special.two) ? SETS[id].special.name : SETS[id].special.duel) : "Set special";
+function bestSetCount() { let best = 0; for (const id in SETS) best = Math.max(best, membersOf(id).size); return best; }
+function triggerSpecial() {
+  if (!run || run.mode !== "fight" || !nodes) return;
+  markInput();
+  const id = readySet();
+  if (!id) { banner("Set special locked", "Needs one full 7-piece set"); return; }
+  if (specialPending || specialPhase) return;
+  if (performance.now() < cooldownUntil) return;
+  specialSet = id; specialMode = equipped.has(SETS[id].special.two) ? "solo" : "duel";
+  specialPending = true; cooldownUntil = performance.now() + cooldownMs();
+}
+function specialBarLine(time, absBar) {
+  const n = nodes, base = baseBpm, bar = Tone.Time("1m").toSeconds();
+  if (specialPending && !specialPhase) {
+    specialPending = false; specialPhase = "windup"; specialBar = absBar;
+    const T = 480 / (base * 1.55);
+    Tone.Transport.bpm.setValueAtTime(base, time);
+    Tone.Transport.bpm.linearRampToValueAtTime(base * 0.55, time + T);
+    windupEnd = time + T;
+    n.slowLP.frequency.cancelScheduledValues(time); n.slowLP.frequency.setValueAtTime(20000, time); n.slowLP.frequency.exponentialRampToValueAtTime(500, time + bar * 1.2);
+    n.riser.envelope.attack = bar * 1.3;
+    n.riser.triggerAttackRelease(bar * 1.35, time, 0.9);
+    n.riserBP.frequency.cancelScheduledValues(time); n.riserBP.frequency.setValueAtTime(300, time); n.riserBP.frequency.exponentialRampToValueAtTime(7000, time + bar * 1.35);
+    const label = specialLabel(specialSet);
+    Tone.Draw.schedule(() => banner(label, "Time slows..."), time);
+  } else if (specialPhase === "windup" && absBar > specialBar) {
+    Tone.Transport.bpm.setValueAtTime(base, Math.max(time, windupEnd + 0.0005));
+    n.slowLP.frequency.cancelScheduledValues(time); n.slowLP.frequency.setValueAtTime(20000, time);
+    if (specialAbort) { specialAbort = false; specialPhase = null; return; }
+    specialPhase = "solo"; specialBar = absBar; specialCrash = true;
+    const duel = specialMode === "duel", V = RT[specialSet].I.solo;
+    V[0].pan.pan.setValueAtTime(duel ? -0.65 : 0, time); V[1].pan.pan.setValueAtTime(duel ? 0.65 : 0, time);
+    Tone.Draw.schedule(() => { invulnUntil = performance.now() + INVULN; shake(10); }, time);
+  } else if (specialPhase === "solo" && absBar >= specialBar + 6) {
+    specialPhase = null;
+  }
+}
+function playSolo(step, inBar, absBar, c, d, time, E) {
+  const sb = absBar - specialBar, sp = SETS[specialSet].special, [A, B] = RT[specialSet].I.solo, off = sp.duelOffset || 0;
+  if (sb >= 5) {
+    if (inBar === 0) {
+      const top = mid(c.arp[0]) + 24;
+      A.vib.depth.setValueAtTime(0.12, time); B.vib.depth.setValueAtTime(0.12, time);
+      A.syn.triggerAttackRelease(Tone.Frequency(top, "midi"), d * 15, time, 1);
+      if (specialMode === "duel") B.syn.triggerAttackRelease(Tone.Frequency(sc(idxOf(top) + 2) + off, "midi"), d * 15, time, 0.9);
+      E("solo", { big: true });
+    }
+    return;
+  }
+  if (inBar === 0) { A.vib.depth.setValueAtTime(sp.voice.vibD || 0.03, time); B.vib.depth.setValueAtTime(sp.voiceB.vibD || 0.03, time); }
+  const { notes, sub } = sp.line(sb, c), len = d / sub;
+  const play = (g, m, k) => g.syn.triggerAttackRelease(Tone.Frequency(m, "midi"), len * 0.9, time + k * len, k ? 0.8 : 0.95);
+  if (inBar % 2 === 0) E("solo", { big: false });
+  for (let k = 0; k < sub; k++) {
+    const m = notes[inBar * sub + k];
+    if (specialMode === "solo") { play(A, m, k); continue; }
+    let who;
+    if (sb === 0) who = "A"; else if (sb === 1) who = "B";
+    else if (sb === 2) who = inBar < 8 ? "A" : "B";
+    else if (sb === 3) who = Math.floor(inBar / 4) % 2 ? "B" : "A";
+    else who = "both";
+    if (who === "A" || who === "both") play(A, m, k);
+    if (who === "B") play(B, m + off, k);
+    if (who === "both") play(B, sc(idxOf(m) + 2) + off, k);
+  }
+}
+
+// ---------- Layer transitions (snap in on the next bar, fade out over a beat) ----------
+function ramp(param, target, start, dur, nowArg) {
+  const now = nowArg !== undefined ? nowArg : Tone.now();
+  param.cancelAndHoldAtTime(now);
+  param.setValueAtTime(param.getValueAtTime(Math.max(start, now)), Math.max(start, now));
+  param.linearRampToValueAtTime(target, Math.max(start, now) + Math.max(dur, 0.005));
+}
+function nextLine(q) { return Math.max(Tone.Transport.nextSubdivision(q || "1m"), Tone.now() + 0.01); }
+function setState(s, st, at) { if (at === undefined || !playing) { s.state = st; return; } Tone.Draw.schedule(() => { s.state = st; }, at); }
+function stemOn(id) {
+  const s = byId(id); if (s.wanted) return;
+  s.wanted = true; s.dropped = false; s.order = ++counter; s.gate = true;
+  if (s.pilot) pilotCrash = true;
+  if (!nodes || !playing) { s.state = "on"; if (nodes) ramp(s.fader.gain, 1, Tone.now(), 0.01); return; }
+  const t = nextLine("1m");
+  ramp(s.fader.gain, 1, t, 0.012);
+  setState(s, "queued"); setState(s, "on", t);
+}
+function stemOff(id, now) {
+  const s = byId(id); if (!s.wanted && !s.dropped) return;
+  s.wanted = false; s.dropped = false; s.order = ++counter;
+  if (!nodes || !playing) { s.state = "off"; s.gate = false; if (nodes) ramp(s.fader.gain, 0, Tone.now(), 0.01); return; }
+  const t = now ? Tone.now() + 0.01 : nextLine("1m"), len = now ? 0.25 : beatSec(), myOrder = s.order;
+  ramp(s.fader.gain, 0, t, len);
+  Tone.Draw.schedule(() => { if (!s.wanted && !s.dropped && s.order === myOrder) s.gate = false; }, t + len + 0.05);
+  setState(s, "leaving"); setState(s, "off", t);
+}
+const backPiece = () => [...equipped].find(id => PIECE[id].body === "back");
+const waistPiece = () => [...equipped].find(id => PIECE[id].body === "waist");
+function dropout(count) {
+  let dropped = 0;
+  for (let k = 0; k < count; k++) {
+    const victim = layers().filter(s => s.wanted && !s.dropped).sort((a, b) => b.order - a.order)[0];
+    if (!victim) break;
+    victim.dropped = true; dropped++;
+    const t = nextLine("8n");
+    ramp(victim.fader.gain, 0, t, 0.04);
+    setState(victim, "dropped", t);
+  }
+  const bars = backPiece() ? 1 : 2;
+  const curBar = Math.floor(Tone.Transport.ticks / (Tone.Transport.PPQ * 4));
+  recoverBar = curBar + 1 + bars;
+  return dropped;
+}
+function recoverAll(time) {
+  recoverBar = -1;
+  for (const s of layers()) {
+    if (!s.dropped) continue;
+    s.dropped = false;
+    if (s.wanted) { ramp(s.fader.gain, 1, time, 0.012, time); setState(s, "on", time); }
+  }
+}
+const active = id => byId(id).state === "on";
+
+// Some browsers keep the audio clock suspended after the first click, which froze the run until a pause.
+// Resume it on any click or key press, and restart the transport if it ever stalls mid-run.
+function ensureAudio() {
+  if (!playing) return;
+  try { if (Tone.context.state !== "running") Tone.context.resume(); } catch (e) {}
+  if (!paused && Tone.Transport.state !== "started") Tone.Transport.start();
+}
+["pointerdown", "keydown", "touchstart"].forEach(ev => document.addEventListener(ev, ensureAudio, true));
+async function startAudio() {
+  if (playing) return;
+  await Tone.start();
+  if (!nodes) { nodes = build(); try { await nodes.reverb.ready; } catch (e) {} }
+  for (const s of STEMS) { const o = s.wanted && !s.dropped; s.fader.gain.cancelScheduledValues(0); s.fader.gain.value = o ? 1 : 0; s.gate = s.wanted; s.state = s.dropped ? "dropped" : (s.wanted ? "on" : "off"); }
+  Tone.Transport.bpm.value = baseBpm;
+  Tone.Transport.position = 0;
+  Tone.Transport.start("+0.08");
+  playing = true;
+  try { await Tone.context.resume(); } catch (e) {}
+}
+
+// =====================================================================
+// Game content
+// =====================================================================
+const SLOT_OF = { flute: "hands", drop: "hands", taiko: "hands", funk: "hands", strings: "hands", choir: "speakers", arp: "core", pads: "forearm" };
+const CAP = { hands: 2, speakers: 2, core: 1, forearm: 1 };
+const SLOT_NAME = { hands: "Hands", speakers: "Shoulder speaker", core: "Chest core", forearm: "Left forearm" };
+// What each layer sounds like at each level, and what it does
+const PW = {
+  flute:   { fx: "Short-range crescent slash in front of the Rig on every flute note.", lv: ["One long note every half bar", "A note on every beat", "The full flute melody"] },
+  drop:    { fx: "Short-range plasma beam aimed at the nearest enemy on every drop, hitting everything along it. A shorter one on the snare.", lv: ["One slow wub per beat", "Two drops a bar and a half-time snare", "The full rhythmic wobble"] },
+  taiko:   { fx: "Slow, heavy slam just in front of the Rig on every big drum hit. Wide area, knocks enemies back.", lv: ["Big hits on beats 1 and 3", "Adds the off hits and rim clicks", "The full taiko groove"] },
+  arp:     { fx: "Chain lightning on the arpeggio. Chains further each level. Lightning damage rolls 50% to 150%, and the top 10% of rolls stun for 0.5 s.", lv: ["Chord tones on each beat", "Eighth-note arpeggio", "The full 16th-note arpeggio"] },
+  pads:    { fx: "The gong makes the Rig invulnerable while it rings.", lv: ["Gong every other bar, 1 s invulnerable", "Gong every bar, 1 s invulnerable", "Gong every bar, 1.6 s invulnerable, warm pads underneath"] },
+  funk:    { fx: "Two fast, narrow stabs at very close range on every bass note.", lv: ["Roots on beats 1 and 3", "Syncopated stabs", "The full funk line"] },
+  choir:   { fx: "Heals the hull on every bar line. Heals more each level.", lv: ["One voice", "Two-part harmony", "The full choir chord"] },
+  strings: { fx: "Long-range arrow that pierces through several enemies on every string note.", lv: ["Quarter notes", "The eighth-note ostinato", "Adds 16th-note pickups"] },
+};
+const BASE_POOL = ["flute", "drop", "taiko", "arp", "pads"];
+const GEAR_FX = {
+  "pm-greaves": "Stomp shockwave on the kick drum.",
+  "pm-girdle": "+25 max hull and 15% less damage taken.",
+  "pm-bracers": "Five-shot spread on every synth stab.",
+  "pm-cloak": "Dropout lasts 1 bar instead of 2.",
+  "pm-helm": "Sonic scream cone on every sung note.",
+  "pm-axe": "Wide heavy cleave on the gallop riff (140 range), mid-range riff bolts on shred runs.",
+  "pm-hatchet": "Thrown hatchet at the nearest enemy on shred runs (mid range).",
+  "pm-cleaver": "Close cleave in front of the Rig on the gallop riff.",
+  "sw-boots": "Stomp on the kick, a wide blast on the gated snare.",
+  "sw-belt": "+25 max hull and 15% less damage taken.",
+  "sw-gauntlets": "Homing laser zaps on the arpeggio.",
+  "sw-cape": "Dropout lasts 1 bar instead of 2.",
+  "sw-visor": "Sonic cone on every robot vocal note.",
+  "sw-railgun": "Rail beam across the whole arena on lead notes, piercing everything in line. Spread shots on brass stabs.",
+  "sw-blade": "Quick short-range neon slash on every lead note.",
+  "sw-pistol": "Three-shot laser burst at mid range on every brass stab.",
+  "or-greaves": "Stomp on the bass drum, a big blast on every cymbal crash.",
+  "or-sash": "Timpani slam on the nearest enemy. +25 max hull and 15% less damage taken.",
+  "or-vambraces": "Small bolts on the spiccato strings.",
+  "or-mantle": "Horn blast cone on every horn chord. Dropout lasts 1 bar instead of 2.",
+  "or-crown": "Every soprano note heals the hull.",
+  "or-greatbow": "Long piercing arrows on violin notes, a heavy knockback arrow on cello notes.",
+  "or-rapier": "Long, narrow thrust on every violin note.",
+  "or-saber": "Wide sweeping slash on every cello note.",
+};
+// Which instrument fires which attack, and the shortest gap between two of them (ms)
+const HOOK = {
+  pm: { kick: ["stomp", 400], snare: ["pulse", 400], gtr: ["wpn:rhythm", 220], lead: ["wpn:lead", 120], keys: ["spread", 300], vox: ["scream", 250] },
+  sw: { kick: ["stomp", 400], snare: ["blast", 400], arp: ["zap", 180], lead: ["wpn:lead", 220], brass: ["wpn:brass", 300], vox: ["scream", 250] },
+  or: { bd: ["stomp", 400], cym: ["blast", 900], timp: ["slam", 300], str: ["zap", 180], horns: ["horn", 400], sop: ["heal", 600], vln: ["wpn:violin", 180], cello: ["wpn:cello", 350] },
+};
+const SHOP = [
+  { id: "funk", name: "Twin Daggers", cost: 40, desc: "Adds Twin Daggers (funk bass) to the reward pool." },
+  { id: "choir", name: "Heart Charm", cost: 40, desc: "Adds Heart Charm (choir, healing) to the reward pool." },
+  { id: "strings", name: "Comet Bow", cost: 60, desc: "Adds Comet Bow (string ostinato, piercing arrows) to the pool." },
+  { id: "set-pm", name: "Power Metal set", cost: 120, desc: "Its 8 pieces start showing up as rewards, mostly after elite fights." },
+  { id: "set-sw", name: "Synthwave set", cost: 120, desc: "Neon night-drive gear: lasers, zaps and a gated-snare blast." },
+  { id: "set-or", name: "Orchestral set", cost: 120, desc: "Timpani slams, horn blasts, a soprano that heals, a violin and cello duet." },
+  { id: "reroll", name: "Encore token", cost: 50, max: 2, desc: "+1 reward reroll every run." },
+  { id: "hp", name: "Reinforced chassis", cost: 40, max: 3, desc: "+15 starting hull." },
+];
+const PERKS = [[2, "Quartet: 4 layer slots"], [3, "1 item ban"], [4, "Quintet: 5 layer slots"], [5, "2 item bans"], [6, "Sextet: 6 layer slots, every body slot can be filled"]];
+const BAND = { 3: "Trio", 4: "Quartet", 5: "Quintet", 6: "Sextet" };
+
+// ---------- Account save (this browser only) ----------
+const SAVE_KEY = "gw-gig-run-v1";
+function defaultSave() { return { xp: 0, level: 1, royalties: 0, owned: {}, bans: [], runs: 0, wins: 0, bestRoom: 0, dev: false, idle: false }; }
+let save = defaultSave();
+try { const j = JSON.parse(localStorage.getItem(SAVE_KEY) || "null"); if (j) save = Object.assign(defaultSave(), j); } catch (e) {}
+if (save.owned.metal) { save.owned["set-pm"] = 1; delete save.owned.metal; }
+function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
+const xpToNext = l => 120 + 80 * (l - 1);
+const owned = id => save.dev || (save.owned[id] || 0) > 0;
+const ownedN = id => save.dev ? (SHOP.find(s => s.id === id).max || 1) : (save.owned[id] || 0);
+const effLevel = () => save.dev ? 6 : save.level;
+const layerCap = () => { const l = effLevel(); return l >= 6 ? 6 : l >= 4 ? 5 : l >= 2 ? 4 : 3; };
+const banSlots = () => { const l = effLevel(); return l >= 5 ? 2 : l >= 3 ? 1 : 0; };
+const powerPool = () => [...BASE_POOL, ...["funk", "choir", "strings"].filter(owned)].filter(id => !save.bans.includes(id));
+const setsUnlocked = () => Object.keys(SETS).filter(id => owned("set-" + id));
+
+// =====================================================================
+// Arena state
+// =====================================================================
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+let AW = 1000, AH = 640;
+let view = { s: 1, ox: 0, oy: 0, dpr: 1, w: 0, h: 0 };
+function resize() {
+  const r = cv.getBoundingClientRect();
+  view.dpr = Math.min(2, window.devicePixelRatio || 1);
+  view.w = r.width; view.h = r.height;
+  cv.width = Math.round(r.width * view.dpr); cv.height = Math.round(r.height * view.dpr);
+  if (!run || run.mode !== "fight") { const portrait = r.height > r.width * 1.15; AW = portrait ? 640 : 1000; AH = portrait ? 980 : 640; }
+  const padT = 70, padB = 70;
+  view.s = Math.min(r.width / AW, (r.height - padT - padB) / AH);
+  if (view.s * AH < r.height * 0.5) view.s = Math.min(r.width / AW, r.height / AH);
+  view.ox = (r.width - AW * view.s) / 2; view.oy = Math.max(0, (r.height - AH * view.s) / 2);
+}
+window.addEventListener("resize", resize);
+
+let run = null;
+// HURT is the Rig's real hitbox: the glowing core dot, much smaller than the body you see
+const HURT = 7;
+const P = { x: 500, y: 320, r: 18, face: 0, hp: 100, maxHp: 100, hitUntil: 0, dashT: 0, dashCd: 0, dvx: 0, dvy: 0, gongUntil: 0, gongStart: 0 };
+let enemies = [], shots = [], bullets = [], fx = [], texts = [];
+let beatPulse = 0, shakeAmt = 0, curStep = 0;
+let lastInput = -1e9, mouse = { x: 0, y: 0, t: -1e9, inside: false };
+const keys = new Set();
+let joy = null, paused = false, strafeDir = 1, dashBuffer = 0;
+
+const rnd = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function shake(a) { shakeAmt = Math.max(shakeAmt, a); }
+function markInput() { lastInput = performance.now(); }
+const piloting = () => active("rock");
+const power = () => (piloting() ? 1 : 0.6) * (specialPhase === "solo" ? 1.25 : 1) * (1 + 0.15 * ((run && run.vol) || 0));
+const lvm = id => 1 + 0.45 * (LV(id) - 1);
+const livingEnemies = () => enemies.filter(e => e.alive && e.on);
+function nearest(x, y, maxD = 1e9, skip) {
+  let best = null, bd = maxD;
+  for (const e of enemies) { if (!e.alive || !e.on || (skip && skip.has(e))) continue; const d = Math.hypot(e.x - x, e.y - y) - e.r; if (d < bd) { bd = d; best = e; } }
+  return best;
+}
+function aimAngle() {
+  if (piloting() && (mouse.inside || performance.now() - mouse.t < 1500)) return Math.atan2(mouse.y - P.y, mouse.x - P.x);
+  if (piloting() && joy && joy.active && Math.hypot(joy.dx, joy.dy) > 0.3 && !nearest(P.x, P.y, 600)) return Math.atan2(joy.dy, joy.dx);
+  const t = nearest(P.x, P.y);
+  return t ? Math.atan2(t.y - P.y, t.x - P.x) : P.face;
+}
+const invulnerable = () => { const now = performance.now(); return now < P.hitUntil || now < invulnUntil || now < P.gongUntil || P.dashT > 0; };
+
+// ---------- Enemies (all original: corrupted signal creatures called "the Static") ----------
+const ET = {
+  hiss:      { name: "Hiss", hp: 18, r: 11, spd: 115, dmg: 10, color: "#c9c3d9", cost: 1 },
+  crackle:   { name: "Crackle", hp: 26, r: 14, spd: 55, dmg: 10, color: "#ff9b54", cost: 2 },
+  clipper:   { name: "Clipper", hp: 34, r: 15, spd: 45, dmg: 14, color: "#ff4d6d", cost: 2.5 },
+  drone:     { name: "Drone", hp: 75, r: 22, spd: 32, dmg: 12, color: "#9b7bff", cost: 3.5 },
+  overdrive: { name: "Overdrive", hp: 1000, r: 38, spd: 60, dmg: 16, color: "#ff6f3c", boss: true },
+  mute:      { name: "The Mute", hp: 3000, r: 46, spd: 40, dmg: 18, color: "#d6d0ff", boss: true },
+};
+let eid = 0;
+function spawnEnemy(type, x, y, scale, elite) {
+  const t = ET[type];
+  const hp = t.hp * scale * (elite ? 3 : 1);
+  const e = { id: ++eid, type, x, y, r: t.r * (elite ? 1.45 : 1), hp, maxHp: hp, spd: t.spd, dmg: t.dmg * (run.act === 2 ? 1.25 : 1), color: t.color,
+    alive: true, on: false, elite: !!elite, boss: !!t.boss, tele: 0, dash: 0, dvx: 0, dvy: 0, phase: eid % 2, flash: 0, wob: Math.random() * 6 };
+  enemies.push(e);
+  return e;
+}
+function edgeSpot() {
+  for (let i = 0; i < 30; i++) { const x = rnd(60, AW - 60), y = rnd(60, AH - 60); if (Math.hypot(x - P.x, y - P.y) > 260) return { x, y }; }
+  return { x: AW / 2, y: 80 };
+}
+function buildRoom() {
+  const idx = run.room, type = run.type;
+  const act = run.act, local = act === 1 ? idx : idx - 6;
+  const scale = 1 + 0.1 * (idx - 1) + (act - 1) * 0.35;
+  run.waves = [];
+  if (type === "mini") { run.waves.push([{ type: "overdrive" }, { type: "hiss" }, { type: "hiss" }]); }
+  else if (type === "boss") { run.waves.push([{ type: "mute" }]); }
+  else {
+    let budget = 4 + local * 1.8 + (act - 1) * 4;
+    if (type === "elite") budget *= 1.35;
+    const avail = ["hiss"]; if (idx >= 2) avail.push("crackle"); if (idx >= 3) avail.push("clipper"); if (idx >= 4 || act === 2) avail.push("drone");
+    const list = [];
+    if (type === "elite") { const pick = avail.filter(a => a !== "hiss"); list.push({ type: pick.length ? pick[Math.floor(Math.random() * pick.length)] : "hiss", elite: true }); budget -= 5; }
+    while (budget > 0.9) { const t = avail[Math.floor(Math.random() * avail.length)]; if (ET[t].cost > budget + 0.5) { if (t === "hiss") break; continue; } list.push({ type: t }); budget -= ET[t].cost; }
+    if (list.length > 6) { const half = Math.ceil(list.length / 2); run.waves.push(list.slice(0, half), list.slice(half)); } else run.waves.push(list);
+  }
+  run.scale = scale;
+  spawnWave();
+}
+function spawnWave() {
+  const w = run.waves.shift(); if (!w) return;
+  for (const s of w) {
+    const pos = ET[s.type].boss ? { x: AW / 2, y: AH * 0.22 } : edgeSpot();
+    const e = spawnEnemy(s.type, pos.x, pos.y, run.scale, s.elite);
+    fx.push({ k: "spawn", x: e.x, y: e.y, r: e.r * 2.2, t: 0, life: 9, color: e.color, e });
+  }
+  run.spawnPending = true;   // they drop in on the next bar line
+}
+
+// ---------- Player weapons ----------
+function shot(o) { shots.push(Object.assign({ r: 5, life: 1.6, pierce: 0, hit: new Set(), homing: 0, color: "#ffd166", t: 0, el: curEl }, o)); }
+function shootAt(target, speed, o) {
+  const a = target ? Math.atan2(target.y - P.y, target.x - P.x) : aimAngle();
+  shot(Object.assign({ x: P.x + Math.cos(a) * 20, y: P.y + Math.sin(a) * 20, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed }, o));
+}
+function ring(x, y, r, dmg, color, push = 0) {
+  fx.push({ k: "ring", x, y, r, t: 0, life: 0.35, color });
+  for (const e of livingEnemies()) { const d = Math.hypot(e.x - x, e.y - y); if (d < r + e.r) { hurt(e, dmg, color); if (push && !e.boss) { const a = Math.atan2(e.y - y, e.x - x); e.x += Math.cos(a) * push; e.y += Math.sin(a) * push; } } }
+}
+function cone(angle, spread, range, dmg, color) {
+  fx.push({ k: "cone", x: P.x, y: P.y, a: angle, s: spread, r: range, t: 0, life: 0.25, color });
+  for (const e of livingEnemies()) {
+    const d = Math.hypot(e.x - P.x, e.y - P.y); if (d > range + e.r) continue;
+    let da = Math.atan2(e.y - P.y, e.x - P.x) - angle; da = Math.atan2(Math.sin(da), Math.cos(da));
+    if (Math.abs(da) < spread + e.r / Math.max(d, 1)) hurt(e, dmg, color);
+  }
+}
+function slash(angle, range, half, dmg, color) {
+  fx.push({ k: "crescent", x: P.x, y: P.y, a: angle, s: half, r: range, t: 0, life: 0.18, color, follow: true });
+  for (const e of livingEnemies()) {
+    const d = Math.hypot(e.x - P.x, e.y - P.y); if (d > range + e.r) continue;
+    let da = Math.atan2(e.y - P.y, e.x - P.x) - angle; da = Math.atan2(Math.sin(da), Math.cos(da));
+    if (Math.abs(da) < half + e.r / Math.max(d, 1)) hurt(e, dmg, color);
+  }
+}
+function stab(angle, range, dmg, color) {
+  fx.push({ k: "stab", x: P.x, y: P.y, a: angle, r: range, t: 0, life: 0.12, color, follow: true });
+  for (const e of livingEnemies()) {
+    const d = Math.hypot(e.x - P.x, e.y - P.y); if (d > range + e.r) continue;
+    let da = Math.atan2(e.y - P.y, e.x - P.x) - angle; da = Math.atan2(Math.sin(da), Math.cos(da));
+    if (Math.abs(da) < 0.28 + e.r / Math.max(d, 1)) hurt(e, dmg, color);
+  }
+}
+// Instant beam along a line: hits everything it crosses
+function beam(angle, length, width, dmg, color) {
+  const x2 = P.x + Math.cos(angle) * length, y2 = P.y + Math.sin(angle) * length;
+  line(P.x, P.y, x2, y2, color, width * 0.5, 0.2);
+  for (const e of livingEnemies()) {
+    const dx = e.x - P.x, dy = e.y - P.y, along = dx * Math.cos(angle) + dy * Math.sin(angle);
+    if (along < 0 || along > length + e.r) continue;
+    if (Math.abs(-dx * Math.sin(angle) + dy * Math.cos(angle)) < width / 2 + e.r) hurt(e, dmg, color);
+  }
+}
+function plasmaBeam(angle, length, width, dmg, color, life) {
+  fx.push({ k: "pbeam", x: P.x, y: P.y, a: angle, r: length, w: width, t: 0, life, color, follow: true });
+  for (const e of livingEnemies()) {
+    const dx = e.x - P.x, dy = e.y - P.y, along = dx * Math.cos(angle) + dy * Math.sin(angle);
+    if (along < 0 || along > length + e.r) continue;
+    if (Math.abs(-dx * Math.sin(angle) + dy * Math.cos(angle)) < width / 2 + e.r) hurt(e, dmg, color);
+  }
+}
+// Saved for a future weapon (Gee liked it): a wide plasma wave that travels a short way, sideways to its path
+function plasmaWave(angle, dmg, color) { shot({ x: P.x + Math.cos(angle) * 22, y: P.y + Math.sin(angle) * 22, vx: Math.cos(angle) * 760, vy: Math.sin(angle) * 760, dmg, color, r: 20, life: 0.34, pierce: 99, plasma: 52 }); }
+function line(x1, y1, x2, y2, color, w = 2, life = 0.18) { fx.push({ k: "line", x: x1, y: y1, x2, y2, t: 0, life, color, w }); }
+function spread(n, gap, dmg, color) { const base = aimAngle(); for (let i = 0; i < n; i++) { const a = base + (i - (n - 1) / 2) * gap; shot({ x: P.x, y: P.y, vx: Math.cos(a) * 520, vy: Math.sin(a) * 520, dmg, color, r: 4, life: 0.9 }); } }
+
+function onMusic(type, a) {
+  if (type === "beat") beatPulse = 1;
+  if (!run || run.mode !== "fight" || paused) return;
+  const pw = power(), C = id => byId(id).color;
+  const elId = { flute: "flute", drop: "drop", taiko: "taiko", funk: "funk", strings: "strings" }[type];
+  if (type === "arp") return withEl("lightning", () => musicAttack(type, a, pw, C));
+  if (elId) return withEl(run.el.get(elId) || null, () => musicAttack(type, a, pw, C));
+  musicAttack(type, a, pw, C);
+}
+function musicAttack(type, a, pw, C) {
+  switch (type) {
+    case "bar": barLine(a.absBar); break;
+    case "beat": enemyBeat(a.inBar, a.absBar); break;
+    case "kick": { const t = nearest(P.x, P.y, 700); if (t || piloting()) shootAt(piloting() ? null : t, 560, { dmg: 10 * (1 + 0.25 * (run.sub || 0)) * pw, color: "#ffd166", r: 6 }); break; }
+    case "snare": if (piloting()) { const base = aimAngle(); for (const off of [-0.18, 0, 0.18]) shot({ x: P.x, y: P.y, vx: Math.cos(base + off) * 620, vy: Math.sin(base + off) * 620, dmg: 8 * pw, color: "#ff5c8a", r: 7, pierce: 1 }); } break;
+    // Sword: short-range, medium-damage crescent slash toward the aim
+    case "flute": if (active("flute")) slash(aimAngle(), 115, 1.05, 16 * lvm("flute") * (LV("flute") === 1 ? 1.5 : 1) * pw, C("flute")); break;
+    // Plasma Blade: short-range, medium-damage line that travels a short distance and cuts through everything
+    // Plasma Blade: short-range beam aimed straight at the nearest enemy, hits everything along it
+    case "drop": if (active("drop")) { const big = a.big, len = big ? 170 + 15 * LV("drop") : 120; const t = nearest(P.x, P.y, len + 60); const a0 = t ? Math.atan2(t.y - P.y, t.x - P.x) : aimAngle(); plasmaBeam(a0, len, big ? 18 : 12, (big ? 18 : 9) * lvm("drop") * pw, C("drop"), big ? 0.28 : 0.16); if (big) shake(2); } break;
+    // War Hammer: slow, heavy area slam in front of the Rig
+    case "taiko": if (active("taiko")) { const a0 = aimAngle(), x = P.x + Math.cos(a0) * 70, y = P.y + Math.sin(a0) * 70, r = 80 + 8 * LV("taiko"); fx.push({ k: "slam", x, y, r, t: 0, life: 0.45, color: C("taiko") }); ring(x, y, r, 30 * a.v * lvm("taiko") * pw, C("taiko"), 40); shake(a.v > 0.85 ? 5 : 2); } break;
+    case "arp": if (active("arp")) {
+      let from = P, t = nearest(P.x, P.y, 320); const hitSet = new Set(); let jumps = 2 + LV("arp");
+      const dmg = 6 * lvm("arp") * (LV("arp") === 1 ? 1.8 : 1) * pw;
+      while (t && jumps-- > 0) { line(from.x, from.y, t.x, t.y, C("arp"), 2, 0.12); hurt(t, dmg, C("arp")); hitSet.add(t); from = t; t = nearest(from.x, from.y, 190, hitSet); }
+    } break;
+    case "gong": if (active("pads")) {
+      const now = performance.now(); P.gongStart = now; P.gongUntil = now + a.dur;
+      fx.push({ k: "ring", x: P.x, y: P.y, r: 120, t: 0, life: 0.6, color: C("pads"), follow: true });
+      if (LV("pads") >= 2) ring(P.x, P.y, 80, 5 * pw, C("pads"), 34);
+    } break;
+    // Twin Daggers: two fast, narrow stabs at very close range
+    case "funk": if (active("funk")) { const a0 = aimAngle(), dmg = 7 * lvm("funk") * (LV("funk") === 1 ? 1.6 : 1) * pw; stab(a0 - 0.18, 80, dmg, C("funk")); const el = curEl; setTimeout(() => { if (run && run.mode === "fight") withEl(el, () => stab(a0 + 0.18, 80, dmg, C("funk"))); }, 60); } break;
+    case "choir": if (active("choir")) heal(2 + 2 * LV("choir"), C("choir")); break;
+    // Comet Bow: long-range piercing arrow
+    case "strings": if (active("strings")) { const t = nearest(P.x, P.y); const base = (t ? Math.atan2(t.y - P.y, t.x - P.x) : aimAngle()) + (a.k % 2 ? 0.04 : -0.04); shot({ x: P.x, y: P.y, vx: Math.cos(base) * 950, vy: Math.sin(base) * 950, dmg: 9 * lvm("strings") * (LV("strings") === 1 ? 1.6 : 1) * pw, color: C("strings"), r: 4, pierce: 2 + LV("strings"), life: 1.1, streak: true }); } break;
+    case "solo": { const list = livingEnemies(); if (!list.length) break; const t = a.big ? (list.find(e => e.boss) || list[0]) : list[Math.floor(Math.random() * list.length)]; const col = SETS[specialSet] ? SETS[specialSet].color : "#ffd166"; line(P.x, P.y, t.x, t.y, col, a.big ? 8 : 3, a.big ? 0.6 : 0.15); hurt(t, (a.big ? 60 : 14) * pw, col); break; }
+  }
+}
+// Set pieces: each instrument note fires its attack
+const hookLast = {};
+function onGear(setId, inst) {
+  if (!run || run.mode !== "fight" || paused) return;
+  const h = HOOK[setId] && HOOK[setId][inst]; if (!h) return;
+  const key = setId + inst, now = performance.now();
+  if (now - (hookLast[key] || 0) < h[1]) return;
+  hookLast[key] = now;
+  const pw = power(), col = SETS[setId].color, list = livingEnemies();
+  if (h[0].startsWith("wpn:")) { const member = h[0].slice(4), w = [...equipped].find(g => PIECE[g].hands && PIECE[g].set === setId && PIECE[g].covers.includes(member)); if (w && WPN_ATK[w]) WPN_ATK[w](member, pw, col); return; }
+  switch (h[0]) {
+    case "stomp": ring(P.x, P.y, 80, 6 * pw, col, 12); break;
+    case "pulse": ring(P.x, P.y, 70, 4 * pw, col, 6); break;
+    case "blast": ring(P.x, P.y, inst === "cym" ? 170 : 120, (inst === "cym" ? 14 : 8) * pw, col, 20); shake(3); break;
+    case "cleave": cone(aimAngle(), 1.1, 115, 11 * pw, col); break;
+    case "bolt": { const t = list[Math.floor(Math.random() * list.length)]; if (t) shootAt(t, 700, { dmg: 6 * pw, color: col, r: 4, pierce: 2, streak: true }); break; }
+    case "zap": { const t = nearest(P.x, P.y, 420); if (t) shootAt(t, 520, { dmg: 5 * pw, color: col, r: 4, homing: 9, life: 1.2 }); break; }
+    case "beam": { const t = nearest(P.x, P.y, 650); if (t) { line(P.x, P.y, t.x, t.y, col, 4, 0.2); hurt(t, 12 * pw, col); } break; }
+    case "spread": spread(5, 0.22, 5 * pw, col); break;
+    case "scream": cone(aimAngle(), 0.5, 280, 9 * pw, col); break;
+    case "horn": cone(aimAngle(), 0.8, 230, 10 * pw, col); break;
+    case "slam": { const t = nearest(P.x, P.y, 460); if (t) { fx.push({ k: "slam", x: t.x, y: t.y, r: 72, t: 0, life: 0.4, color: col }); ring(t.x, t.y, 72, 18 * pw, col); } break; }
+    case "heal": heal(2, col); break;
+  }
+}
+// Set weapons: each one attacks in its own shape, on its own instrument's notes
+const WPN_ATK = {
+  "pm-axe":      (m, pw, c) => m === "rhythm" ? slash(aimAngle(), 140, 1.2, 16 * pw, c) : bolt(c, 640, 7 * pw, 2),
+  "pm-cleaver":  (m, pw, c) => slash(aimAngle(), 105, 1.0, 12 * pw, c),
+  "pm-hatchet":  (m, pw, c) => { const t = nearest(P.x, P.y, 380); if (t) shootAt(t, 560, { dmg: 9 * pw, color: c, r: 6, pierce: 1, life: 0.7, spin: true }); },
+  "sw-railgun":  (m, pw, c) => m === "lead" ? beam(aimAngle(), 900, 14, 15 * pw, c) : spread(5, 0.2, 5 * pw, c),
+  "sw-blade":    (m, pw, c) => slash(aimAngle(), 110, 0.9, 13 * pw, c),
+  "sw-pistol":   (m, pw, c) => { const a = aimAngle(); for (let i = 0; i < 3; i++) setTimeout(() => { if (run && run.mode === "fight") shot({ x: P.x, y: P.y, vx: Math.cos(a) * 820, vy: Math.sin(a) * 820, dmg: 6 * pw, color: c, r: 4, life: 0.55, streak: true }); }, i * 55); },
+  "or-greatbow": (m, pw, c) => m === "violin" ? bolt(c, 950, 10 * pw, 3) : (() => { const t = nearest(P.x, P.y); const a = t ? Math.atan2(t.y - P.y, t.x - P.x) : aimAngle(); shot({ x: P.x, y: P.y, vx: Math.cos(a) * 520, vy: Math.sin(a) * 520, dmg: 24 * pw, color: c, r: 9, pierce: 4, life: 1.4, knock: 40 }); })(),
+  "or-rapier":   (m, pw, c) => stab(aimAngle(), 125, 12 * pw, c),
+  "or-saber":    (m, pw, c) => slash(aimAngle(), 125, 1.3, 15 * pw, c),
+};
+function bolt(c, speed, dmg, pierce) { const t = nearest(P.x, P.y); const a = t ? Math.atan2(t.y - P.y, t.x - P.x) : aimAngle(); shot({ x: P.x, y: P.y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, dmg, color: c, r: 4, pierce, life: 1, streak: true }); }
+function heal(n, color) { const before = P.hp; P.hp = Math.min(P.maxHp, P.hp + n); if (P.hp > before) texts.push({ x: P.x, y: P.y - 30, s: "+" + Math.round(P.hp - before), t: 0, color: color || "#5ee0a0" }); }
+
+// ---------- Elements ----------
+// Fire: full damage, each hit adds a burn stack (stacks up to 6, 3 s from the last hit)
+// Cold: 75% damage, slows the enemy's movement and attacks by 25% for 2 s
+// Lightning: damage rolls 50-150%. A roll in the top 10% stuns for 0.5 s (bosses: 0.25 s, once per 2 s)
+const BURN_DPS = 4;
+const EL = {
+  fire:      { name: "Fire", color: "#ff7a3c", music: "gets a hot overdrive on top", fx: "Hits burn for 4 damage a second per stack, stacking up to 6." },
+  cold:      { name: "Cold", color: "#8fe3ff", music: "gets icy, ringing echoes", fx: "Hits deal 25% less but slow the enemy's movement and attacks by 25% for 2 s." },
+  lightning: { name: "Lightning", color: "#ffe066", music: "gets a crackling, bit-crushed edge", fx: "Damage rolls 50% to 150%. The top 10% of rolls stun for 0.5 s." },
+};
+const EL_WEAPONS = ["flute", "drop", "taiko", "funk", "strings"];
+let curEl = null;
+function withEl(el, fn) { const prev = curEl; curEl = el; try { fn(); } finally { curEl = prev; } }
+function applyEl(e, dmg, el) {
+  const now = performance.now();
+  if (el === "fire") { e.burn = Math.min(6, (e.burn || 0) + 1); e.burnUntil = now + 3000; }
+  else if (el === "cold") { dmg *= 0.75; e.chillUntil = now + 2000; }
+  else if (el === "lightning") {
+    const r = Math.random(); dmg *= 0.5 + r;
+    if (r >= 0.9 && !(e.boss && now < (e.stunCd || 0))) { e.stunUntil = now + (e.boss ? 250 : 500); e.stunCd = now + 2000; thunderCrash(); fx.push({ k: "ring", x: e.x, y: e.y, r: e.r + 14, t: 0, life: 0.3, color: EL.lightning.color }); }
+  }
+  return dmg;
+}
+
+// Element ambience: a slightly random backing bed per element present in the build.
+// Fire = crackling logs, Cold = blowing wind, Lightning = rain + distant thunder (and a loud crash on each stun).
+let amb = null;
+function ambInit() {
+  if (amb || !nodes) return amb;
+  const bus = new Tone.Gain(1).connect(nodes.duckBus);
+  // fire: low ember roar + random pops
+  const fireG = new Tone.Gain(0).connect(bus);
+  const roar = new Tone.Noise("brown").start(); roar.volume.value = -22; roar.chain(new Tone.Filter({ type: "lowpass", frequency: 420 }), fireG);
+  const popF = new Tone.Filter({ type: "bandpass", frequency: 2600, Q: 1.2 }).connect(fireG);
+  const pop = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01 } }).connect(popF); pop.volume.value = -8;
+  // cold: band-passed pink noise whose pitch and level wander
+  const coldG = new Tone.Gain(0).connect(bus);
+  const windF = new Tone.Filter({ type: "bandpass", frequency: 600, Q: 2.2 });
+  const windV = new Tone.Gain(0.5);
+  const wind = new Tone.Noise("pink").start(); wind.volume.value = -6; wind.chain(windF, windV, coldG);
+  // lightning: rain hiss + rumbles
+  const ltG = new Tone.Gain(0).connect(bus);
+  const rain = new Tone.Noise("pink").start(); rain.volume.value = -24; rain.chain(new Tone.Filter({ type: "highpass", frequency: 3200 }), ltG);
+  const rumbleF = new Tone.Filter({ type: "lowpass", frequency: 260 }).connect(ltG);
+  const rumble = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.25, decay: 2.2, sustain: 0, release: 0.5 } }).connect(rumbleF); rumble.volume.value = -4;
+  // stun crash bypasses the duck bus so it lands extra loud
+  const crashBus = new Tone.Gain(1.4).connect(nodes.master);
+  const crash = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.002, decay: 0.9, sustain: 0, release: 0.4 } });
+  crash.chain(new Tone.Filter({ type: "lowpass", frequency: 5200 }), crashBus); crash.volume.value = 2;
+  const boom = new Tone.MembraneSynth({ pitchDecay: 0.25, octaves: 5, envelope: { attack: 0.002, decay: 1.4, sustain: 0, release: 0.4 } }).connect(crashBus); boom.volume.value = 2;
+  const boomTail = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.05, decay: 2.6, sustain: 0, release: 0.6 } });
+  boomTail.chain(new Tone.Filter({ type: "lowpass", frequency: 320 }), crashBus); boomTail.volume.value = 4;
+  amb = { bus, fireG, pop, popF, coldG, windF, windV, ltG, rumble, crash, boom, boomTail, lastCrash: 0, lastRumble: 0 };
+  return amb;
+}
+function elCount(el) { if (!run || !run.el) return 0; let n = 0; for (const [id, v] of run.el) if (v === el && run.lv.has(id)) n++; if (el === "lightning" && run.lv && run.lv.has("arp") && active("arp")) n++; return n; }
+function ambUpdate() {
+  if (!nodes) return; if (!amb && !run) return; const a = ambInit();
+  const lvl = n => n ? Math.min(1, 0.6 + 0.2 * n) : 0;
+  a.fireG.gain.rampTo(lvl(elCount("fire")), 1);
+  a.coldG.gain.rampTo(lvl(elCount("cold")), 1);
+  a.ltG.gain.rampTo(lvl(elCount("lightning")), 1);
+}
+function ambTick(time, inBar) {
+  if (!run || !nodes) return;
+  if (inBar === 0) ambUpdate();
+  if (!amb) return;
+  const f = elCount("fire"), c = elCount("cold"), l = elCount("lightning");
+  if (f && Math.random() < 0.18 + 0.06 * f) {          // pops land off the grid
+    const t = time + Math.random() * 0.1;
+    amb.popF.frequency.setValueAtTime(1400 + Math.random() * 3200, t);
+    amb.pop.triggerAttackRelease(0.01 + Math.random() * 0.03, t, 0.3 + Math.random() * 0.7);
+    if (Math.random() < 0.25) amb.pop.triggerAttackRelease(0.01, t + 0.02 + Math.random() * 0.05, 0.2 + Math.random() * 0.4);
+  }
+  if (c && inBar % 4 === 0) {                          // gusts drift every beat
+    amb.windF.frequency.rampTo(320 + Math.random() * 1100, 0.8, time);
+    amb.windV.gain.rampTo(0.25 + Math.random() * 0.75, 0.9, time);
+  }
+  if (l && inBar % 4 === 0 && time - amb.lastRumble > 3 && Math.random() < 0.08 + 0.03 * l) {
+    amb.lastRumble = time; amb.rumble.triggerAttackRelease(2, time + Math.random() * 0.2, 0.4 + Math.random() * 0.5);
+  }
+}
+function thunderCrash() {
+  if (!nodes || !ambInit()) return;
+  const t = Tone.now() + 0.01; if (t - amb.lastCrash < 0.35) return; amb.lastCrash = t;
+  amb.crash.triggerAttackRelease(0.8, t, 1);
+  amb.boom.triggerAttackRelease(38 + Math.random() * 10, 1.2, t, 1);
+  amb.boomTail.triggerAttackRelease(2.4, t + 0.04, 1);
+}
+function hurt(e, dmg, color) {
+  if (!e.alive || !e.on) return;
+  if (curEl) dmg = applyEl(e, dmg, curEl);
+  e.hp -= dmg; e.flash = 0.08;
+  if (texts.length < 70) texts.push({ x: e.x + rnd(-8, 8), y: e.y - e.r, s: String(Math.max(1, Math.round(dmg))), t: 0, color: color || "#ffffff" });
+  if (e.hp <= 0) {
+    e.alive = false; run.kills++;
+    for (let i = 0; i < (e.boss ? 40 : 10); i++) fx.push({ k: "spark", x: e.x, y: e.y, vx: rnd(-1, 1) * 260, vy: rnd(-1, 1) * 260, t: 0, life: rnd(0.3, 0.7), color: e.color });
+    if (e.boss) { shake(14); bullets = []; }
+  }
+}
+
+// ---------- Enemy behaviour (everything they do lands on the beat) ----------
+function eBullet(x, y, a, spd, dmg, color = "#ff7a8f", r = 6) { bullets.push({ x, y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, dmg, r, color, life: 6 }); }
+function enemyBeat(inBar, absBar) {
+  const spd = run.act === 2 ? 240 : 205;
+  const now = performance.now();
+  for (const e of enemies) {
+    if (!e.alive || !e.on) continue;
+    if (now < (e.stunUntil || 0)) continue;
+    if (now < (e.chillUntil || 0) && Math.random() < 0.25) continue;
+    const toP = Math.atan2(P.y - e.y, P.x - e.x);
+    if (e.type === "crackle") {
+      const fireBar = (absBar + e.phase) % 2 === 0;
+      if (fireBar && inBar === 8) e.tele = 1;
+      if (inBar === 0 && e.tele) { e.tele = 0; const n = e.elite ? 5 : 3; for (let i = 0; i < n; i++) eBullet(e.x, e.y, toP + (i - (n - 1) / 2) * 0.22, spd, 8 * (run.act === 2 ? 1.25 : 1), e.color); }
+    } else if (e.type === "clipper") {
+      if (inBar === 12) { e.tele = 1; e.lock = toP; }
+      if (inBar === 0 && e.tele) { e.tele = 0; e.dash = 0.38; e.dvx = Math.cos(e.lock) * (e.elite ? 640 : 540); e.dvy = Math.sin(e.lock) * (e.elite ? 640 : 540); }
+    } else if (e.type === "drone") {
+      if (inBar === 0 && (absBar + e.phase) % 2 === 0) { const n = e.elite ? 16 : 10, off = Math.random(); for (let i = 0; i < n; i++) eBullet(e.x, e.y, off + i * Math.PI * 2 / n, spd * 0.8, 9, e.color, 7); }
+      if (inBar === 8) e.tele = 1;
+      if (inBar === 0) e.tele = 0;
+    } else if (e.type === "overdrive") {
+      if (inBar === 12) { e.tele = 1; e.lock = toP; }
+      if (inBar === 0) { if (e.tele) { e.tele = 0; e.dash = 0.5; e.dvx = Math.cos(e.lock) * 600; e.dvy = Math.sin(e.lock) * 600; } if (absBar % 2 === 0) { const off = Math.random(); for (let i = 0; i < 16; i++) eBullet(e.x, e.y, off + i * Math.PI / 8, spd * 0.75, 10, e.color, 7); } }
+      if (inBar === 4 || inBar === 8) for (const o of [-0.15, 0, 0.15]) eBullet(e.x, e.y, toP + o, spd, 9, "#ffb38a");
+      if (e.hp < e.maxHp * 0.5 && inBar === 0 && absBar % 4 === 0 && livingEnemies().length < 6) for (let i = 0; i < 2; i++) { const s = edgeSpot(); const h = spawnEnemy("hiss", s.x, s.y, run.scale); h.on = true; }
+    } else if (e.type === "mute") {
+      const p2 = e.hp < e.maxHp * 0.5;
+      if (inBar === 0) { const n = p2 ? 22 : 16, off = (absBar * 0.37) % 6.28; for (let i = 0; i < n; i++) eBullet(e.x, e.y, off + i * Math.PI * 2 / n, spd * 0.7, 10, "#d6d0ff", 7); }
+      if (inBar === 4 || inBar === 8 || inBar === 12) { const n = p2 ? 5 : 3; for (let i = 0; i < n; i++) eBullet(e.x, e.y, toP + (i - (n - 1) / 2) * 0.16, spd * 1.05, 9, "#ff7a8f"); }
+      if (inBar === 0 && absBar % 4 === 2 && livingEnemies().length < 7) for (let i = 0; i < (p2 ? 3 : 2); i++) { const s = edgeSpot(); const h = spawnEnemy("hiss", s.x, s.y, run.scale); h.on = true; fx.push({ k: "ring", x: s.x, y: s.y, r: 24, t: 0, life: .3, color: h.color }); }
+      if (p2 && inBar === 12 && absBar % 4 === 3) e.tele = 1;
+      if (p2 && inBar === 0 && e.tele) { e.tele = 0; fx.push({ k: "wave", x: e.x, y: e.y, r: e.r, t: 0, life: 4, gap: toP + Math.PI + rnd(-0.6, 0.6), gw: 0.55, color: "#ffffff", hit: false }); banner("Silence wave", "Slip through the gap or dash through it"); }
+      if (!e.p2 && p2) { e.p2 = true; banner("The Mute is furious", "Silence waves incoming"); }
+    }
+  }
+}
+
+let lastBarAt = 0;
+function barLine(absBar) {
+  lastBarAt = performance.now();
+  if (!run || run.mode !== "fight") return;
+  if (run.spawnPending) { run.spawnPending = false; for (const e of enemies) if (e.alive && !e.on) e.on = true; fx = fx.filter(f => f.k !== "spawn"); }
+  if (run.pendingReward) { run.pendingReward = false; openReward(); return; }
+  if (run.fightOver) return;
+  strafeDir = Math.random() < 0.5 ? -1 : 1;
+  if (absBar % 2 === 0) strafeDir *= -1;
+}
+
+// ---------- Run flow ----------
+function newRun() {
+  const hp = 100 + 15 * ownedN("hp");
+  run = { room: 0, act: 1, type: "start", mode: "choice", kills: 0, lv: new Map(), el: new Map(), vol: 0, tempo: 0, sub: 0, rerolls: ownedN("reroll"), fightOver: false, pendingReward: false, spawnPending: false, waves: [], path: [], started: performance.now(), miniDown: false, bossDown: false };
+  P.maxHp = hp; P.hp = hp; P.x = AW / 2; P.y = AH / 2; P.hitUntil = 0; P.gongUntil = 0;
+  enemies = []; shots = []; bullets = []; fx = []; texts = [];
+  for (const s of STEMS) if (!s.base) stemOff(s.id, true);
+  equipped.clear(); for (const k in gearOrder) delete gearOrder[k];
+  specialPending = false; if (specialPhase === "solo") specialPhase = null; cooldownUntil = 0; invulnUntil = 0;
+  if (baseBpm !== 128) { baseBpm = 128; if (nodes && !specialPhase) Tone.Transport.bpm.rampTo(baseBpm, 0.5); }
+  resetMix();
+  document.getElementById("hudTop").hidden = false; document.getElementById("hudBot").hidden = false;
+  showChoices("start");
+}
+function startRoom(type) {
+  run.room++; run.type = type; run.act = run.room <= 6 ? 1 : 2; run.path.push(type);
+  if (run.room === 7) { setTempo(); banner("Act II", `The tempo climbs to ${baseBpm} BPM`); }
+  hideScreen();
+  enemies = []; shots = []; bullets = []; fx = [];
+  run.fightOver = false; run.mode = "fight"; run.roomStart = performance.now(); ensureAudio();
+  P.x = AW / 2; P.y = AH * 0.72;
+  if (type === "green") { run.fightOver = true; heal(Math.round(P.maxHp * 0.35)); banner("Green Room", "Hull repaired 35%"); setTimeout(() => { if (run && run.type === "green" && run.mode === "fight") showChoices("green"); }, 1400); return; }
+  const titles = { fight: "Room " + run.room, elite: "Elite room", mini: "Mini-boss: Overdrive", boss: "Boss: The Mute" };
+  banner(titles[type] || "Room " + run.room, type === "boss" ? "Final room" : type === "mini" ? "End of Act I" : "Enemies drop in on the bar");
+  buildRoom();
+}
+function roomCleared() {
+  run.fightOver = true; bullets = [];
+  if (run.type === "mini") run.miniDown = true;
+  if (run.type === "boss") { run.bossDown = true; setTimeout(() => endRun(true), 1800); banner("The Mute is silenced", "Run complete"); return; }
+  run.pendingReward = true;
+  banner("Room clear", "Reward on the next bar");
+}
+function openReward() { showChoices(run.type === "elite" || run.type === "mini" ? "elite" : "room"); }
+
+function endRun(won) {
+  if (!run || run.mode === "over") return;
+  run.mode = "over";
+  const roomsCleared = won ? run.room : Math.max(0, run.room - 1);
+  for (const s of STEMS) if (!s.base) stemOff(s.id, true);
+  equipped.clear();
+  if (specialPhase === "windup") specialAbort = true; else specialPhase = null;
+  specialPending = false;
+  if (nodes) { const f = nodes.slowLP.frequency, t = Tone.now(); f.cancelScheduledValues(t); f.setValueAtTime(20000, t); f.exponentialRampToValueAtTime(350, t + 0.6); f.exponentialRampToValueAtTime(20000, t + 3); }
+  if (baseBpm !== 128) { baseBpm = 128; if (!specialAbort) Tone.Transport.bpm.rampTo(128, 2); }
+  resetMix();
+  const xp = roomsCleared * 15 + run.kills + (run.miniDown ? 60 : 0) + (run.bossDown ? 150 : 0) + (won ? 100 : 0);
+  const roy = Math.floor(xp / 2);
+  const before = save.level;
+  save.xp += xp; save.royalties += roy; save.runs++; if (won) save.wins++; save.bestRoom = Math.max(save.bestRoom, run.room);
+  while (save.xp >= xpToNext(save.level)) { save.xp -= xpToNext(save.level); save.level++; }
+  persist();
+  const secs = Math.round((performance.now() - run.started) / 1000);
+  setTimeout(() => showSummary({ won, roomsCleared, xp, roy, before, after: save.level, secs, kills: run.kills, room: run.room }), won ? 400 : 1300);
+}
+
+// ---------- Reward choices ----------
+function handItems() {
+  const items = [...run.lv.keys()].filter(id => SLOT_OF[id] === "hands").map(id => ({ kind: "layer", id, order: byId(id).order, hands: 1 }));
+  for (const g of equipped) { const pc = PIECE[g]; if (pc.hands) items.push({ kind: "gear", id: g, order: gearOrder[g], hands: pc.hands }); }
+  return items.sort((a, b) => a.order - b.order);
+}
+const nameOf = r => r.kind === "layer" ? byId(r.id).power : PIECE[r.id].item;
+function plan(card) {
+  const rm = [];
+  const inRm = i => rm.some(r => r.kind === i.kind && r.id === i.id);
+  if (card.type === "new") {
+    const sk = SLOT_OF[card.id];
+    if (sk === "hands") { const items = handItems(); let used = items.reduce((t, i) => t + i.hands, 0); while (used + 1 > 2 && items.length) { const o = items.shift(); rm.push(o); used -= o.hands; } }
+    else { const users = [...run.lv.keys()].filter(i => SLOT_OF[i] === sk).sort((a, b) => byId(a).order - byId(b).order); if (users.length >= CAP[sk]) rm.push({ kind: "layer", id: users[0] }); }
+    const count = run.lv.size - rm.filter(r => r.kind === "layer").length;
+    if (count + 1 > layerCap()) { const old = [...run.lv.keys()].filter(i => !inRm({ kind: "layer", id: i })).sort((a, b) => byId(a).order - byId(b).order)[0]; if (old) rm.push({ kind: "layer", id: old }); }
+  } else if (card.type === "gear") {
+    const pc = PIECE[card.id];
+    if (pc.hands) {
+      for (const g of equipped) { const o = PIECE[g]; if (o.hands && o.set === pc.set && o.covers.some(m => pc.covers.includes(m))) rm.push({ kind: "gear", id: g }); }
+      const items = handItems().filter(i => !inRm(i)); let used = items.reduce((t, i) => t + i.hands, 0);
+      while (used + pc.hands > 2 && items.length) { const o = items.shift(); rm.push(o); used -= o.hands; }
+    } else {
+      for (const g of equipped) if (PIECE[g].body === pc.body) rm.push({ kind: "gear", id: g });
+    }
+  }
+  return rm;
+}
+function makeChoices(kind) {
+  const c = [];
+  const pool = powerPool();
+  for (const id of pool) {
+    const lv = run.lv.get(id);
+    if (lv) { if (lv < 3 && kind !== "start") c.push({ type: "up", id, w: 3 }); }
+    else if (kind !== "green") c.push({ type: "new", id, w: kind === "start" ? 1 : 3 });
+  }
+  if (kind !== "start") {
+    for (const sid of setsUnlocked()) {
+      const have = membersOf(sid);
+      for (const pc of SETS[sid].pieces) {
+        if (equipped.has(pc.id)) continue;
+        if (pc.hands && pc.covers.every(m => have.has(m))) continue;
+        c.push({ type: "gear", id: pc.id, w: (kind === "elite" ? 4 : kind === "green" ? 0.6 : 1) * (have.size ? 2 : 1) / Math.max(1, setsUnlocked().length * 0.6) });
+      }
+    }
+    if ((run.sub || 0) < 3) c.push({ type: "hp", w: kind === "green" ? 2 : 0.9 });
+    if ((run.vol || 0) < 3) c.push({ type: "amp", w: 0.8 });
+    for (const id of run.lv.keys()) if (EL_WEAPONS.includes(id) && !run.el.has(id)) for (const el of Object.keys(EL)) c.push({ type: "elem", id, el, w: 0.45 });
+    if ((run.tempo || 0) < 3) c.push({ type: "tempo", w: 0.7 });
+  }
+  const out = [];
+  if (kind === "elite") { const g = c.filter(x => x.type === "gear"); if (g.length) { const tw = g.reduce((t, x) => t + x.w, 0); let r = Math.random() * tw; for (const x of g) { r -= x.w; if (r <= 0) { out.push(x); break; } } } }
+  while (out.length < 3) {
+    const left = c.filter(x => !out.includes(x)); if (!left.length) break;
+    const total = left.reduce((t, x) => t + x.w, 0); let r = Math.random() * total;
+    for (const x of left) { r -= x.w; if (r <= 0) { out.push(x); break; } }
+  }
+  return out;
+}
+function cardHTML(card, i) {
+  let color = "#ffd166", tag = "", title = "", music = "", eff = "", slot = "";
+  if (card.type === "new" || card.type === "up") {
+    const s = byId(card.id); color = s.color;
+    const lv = card.type === "up" ? run.lv.get(card.id) + 1 : 1;
+    tag = card.type === "new" ? "NEW LAYER" : "LEVEL " + lv; title = s.power + (card.type === "up" ? " Lv " + lv : "");
+    music = (card.type === "new" ? s.layer + ": " : "Music: ") + PW[card.id].lv[lv - 1].toLowerCase();
+    eff = PW[card.id].fx + (card.type === "up" && card.id !== "pads" ? " +45% damage." : "");
+    slot = "Mounts on: " + SLOT_NAME[SLOT_OF[card.id]];
+  } else if (card.type === "gear") {
+    const pc = PIECE[card.id], S = SETS[pc.set], have = membersOf(pc.set); color = S.color;
+    tag = S.name.toUpperCase() + " · " + (have.size + pc.covers.filter(m => !have.has(m)).length) + "/7"; title = pc.item;
+    music = "Adds: " + pc.member + " (" + pc.adds + ")"; eff = GEAR_FX[card.id]; slot = pc.hands ? (pc.hands === 2 ? "Two-handed weapon · counts as 2" : "One-handed weapon") : BODY[pc.body].label + " armor";
+  } else if (card.type === "hp") { const n = (run.sub || 0) + 1; color = "#5ee0a0"; tag = `MIX · ${n}/3`; title = "Subwoofer"; music = "Mix: the kick drum gets deeper and louder (+2 dB)"; eff = "+20 max hull and repair 20. Base beat shots deal +25% damage."; slot = "Chassis"; }
+  else if (card.type === "amp") { const n = (run.vol || 0) + 1; color = "#ffd166"; tag = `MIX · ${n}/3`; title = "Amp: volume up"; music = "Mix: the whole song gets louder (+1.5 dB)"; eff = "+15% damage on every attack."; slot = "Amp"; }
+  else if (card.type === "tempo") { const n = (run.tempo || 0) + 1; color = "#3dd6ff"; tag = `MIX · ${n}/3`; title = "Metronome: tempo up"; music = `Mix: the song speeds up by 4 BPM (to ${actBpm() + 4})`; eff = "Every note comes sooner, so every weapon fires faster. The Static moves on the beat too, so they speed up as well."; slot = "Metronome"; }
+  else if (card.type === "elem") { const E2 = EL[card.el], st = byId(card.id); color = E2.color; tag = "ELEMENT · " + E2.name.toUpperCase(); title = E2.name + " " + st.power; music = "Mix: the " + st.layer.toLowerCase() + " " + E2.music; eff = E2.fx; slot = "Modifies " + st.power + " (one element per weapon)"; }
+  const rm = plan(card);
+  const warn = rm.length ? `<span class="warn">Replaces ${rm.map(nameOf).join(" and ")} on the next bar</span>` : "";
+  return `<button class="card" type="button" data-i="${i}" style="--c:${color}"><span class="tag">${tag}</span><b>${title}</b><span class="music">${music}</span><span class="fx">${eff}</span><span class="slot">${slot}</span>${warn}<kbd>${i + 1}</kbd></button>`;
+}
+let choiceState = null, idleTimer = null;
+function showChoices(kind) {
+  run.mode = "choice";
+  const cards = makeChoices(kind);
+  choiceState = { kind, cards };
+  const head = kind === "start" ? ["Pick your opening layer", "The Rig starts with only the base beat. Each pick adds a layer to the song and a weapon to the Rig. New layers start as a simple part and get busier as they level up."]
+    : kind === "green" ? ["Green Room", "Tune up before the next room."]
+    : kind === "elite" ? ["Elite reward", "Set pieces are more likely after tough fights."]
+    : ["Room clear", "Pick one. New layers come in on the next bar line."];
+  const cap = layerCap();
+  showScreen(`<div class="panel">
+    <div><h2>${head[0]}</h2><p>${head[1]} Layers ${run.lv.size}/${cap} (${BAND[cap]}).</p></div>
+    <div class="cards">${cards.map(cardHTML).join("") || "<p>Nothing left to offer.</p>"}</div>
+    <div class="row-actions">${run.rerolls > 0 ? `<button class="btn small" id="rerollBtn" type="button">Reroll (${run.rerolls} left) <kbd>R</kbd></button>` : ""}
+    ${!cards.length ? `<button class="btn small" id="skipBtn" type="button">Continue</button>` : ""}<span id="idleNote" style="font-size:.8rem;color:var(--mute)"></span></div></div>`);
+  document.querySelectorAll(".card").forEach(b => b.addEventListener("click", () => pick(+b.dataset.i)));
+  const rr = document.getElementById("rerollBtn"); if (rr) rr.addEventListener("click", reroll);
+  const sk = document.getElementById("skipBtn"); if (sk) sk.addEventListener("click", () => afterPick());
+  armIdle(() => cards.length ? pick(0) : afterPick());
+}
+function reroll() { if (!choiceState || run.rerolls <= 0) return; run.rerolls--; showChoices(choiceState.kind); }
+function pick(i) {
+  if (!choiceState) return;
+  const card = choiceState.cards[i]; if (!card) return;
+  choiceState = null;
+  applyCard(card);
+  afterPick();
+}
+function unequip(id) {
+  equipped.delete(id); delete gearOrder[id];
+  if (PIECE[id].body === "waist") { P.maxHp -= 25; P.hp = Math.min(P.hp, P.maxHp); }
+}
+function applyCard(card) {
+  for (const r of plan(card)) {
+    if (r.kind === "layer") { run.lv.delete(r.id); stemOff(r.id); if (run.el.has(r.id)) { run.el.delete(r.id); elementSound(r.id, null); } ambUpdate(); }
+    else unequip(r.id);
+  }
+  if (card.type === "new") { run.lv.set(card.id, 1); stemOn(card.id); }
+  else if (card.type === "up") run.lv.set(card.id, run.lv.get(card.id) + 1);
+  else if (card.type === "gear") { equipped.add(card.id); gearOrder[card.id] = ++counter; if (PIECE[card.id].body === "waist") { P.maxHp += 25; P.hp += 25; } }
+  else if (card.type === "hp") { P.maxHp += 20; P.hp = Math.min(P.maxHp, P.hp + 20); run.sub = (run.sub || 0) + 1; if (nodes) nodes.kick.volume.rampTo(2 * run.sub, 0.5); }
+  else if (card.type === "amp") { run.vol = (run.vol || 0) + 1; if (nodes) nodes.master.volume.rampTo(-6 + 1.5 * run.vol, 0.5); }
+  else if (card.type === "tempo") { run.tempo = (run.tempo || 0) + 1; setTempo(); }
+  else if (card.type === "elem") { run.el.set(card.id, card.el); elementSound(card.id, card.el); ambUpdate(); }
+  if (card.type === "gear" && readySet()) { const id = readySet(); setTimeout(() => banner("Full " + SETS[id].name + " set", specialLabel(id) + " unlocked: press X"), 600); }
+}
+// Non-layer pickups change the mix instead of adding a part: volume, kick depth and tempo
+const actBpm = () => (run && run.room >= 7 ? 134 : 128) + 4 * ((run && run.tempo) || 0);
+function setTempo() { baseBpm = actBpm(); if (nodes && !specialPhase && !specialPending) Tone.Transport.bpm.rampTo(baseBpm, 1); }
+function resetMix() { if (!nodes) return; nodes.master.volume.rampTo(-6, 0.5); nodes.kick.volume.rampTo(0, 0.5); for (const id of EL_WEAPONS) elementSound(id, null); if (amb) for (const k of ["fireG", "coldG", "ltG"]) amb[k].gain.rampTo(0, 0.8); }
+// Each element adds a parallel effect on that weapon's own layer, so you hear which weapon carries it
+function elementSound(id, el) {
+  const s = byId(id); if (!nodes || !s.vol) return;
+  s.elFx = s.elFx || {};
+  for (const k in s.elFx) s.elFx[k].gain.rampTo(0, 0.3);
+  if (!el) return;
+  if (!s.elFx[el]) {
+    const g = new Tone.Gain(0).connect(nodes.duckBus);
+    const chain = el === "fire" ? [new Tone.Distortion({ distortion: 0.6, oversample: "2x" }), new Tone.Filter({ type: "lowpass", frequency: 3600 })]
+      : el === "cold" ? [new Tone.Filter({ type: "highpass", frequency: 900 }), new Tone.FeedbackDelay({ delayTime: "8n.", feedback: 0.5, wet: 1 }), new Tone.Filter({ type: "lowpass", frequency: 7000 })]
+      : [new Tone.Distortion({ distortion: 1, oversample: "none" }), new Tone.Filter({ type: "highpass", frequency: 2200 }), new Tone.Tremolo(16, 0.9).start()];
+    s.vol.chain(...chain, g);
+    s.elFx[el] = g;
+  }
+  s.elFx[el].gain.rampTo(el === "fire" ? 0.55 : el === "cold" ? 0.7 : 0.45, 0.5);
+}
+function afterPick() {
+  if (run.room === 0) { startRoom("fight"); return; }
+  showDoors();
+}
+function doorOptions() {
+  const next = run.room + 1;
+  if (next === 6) return ["mini"];
+  if (next === 12) return ["boss"];
+  const opts = new Set();
+  const roll = () => { const r = Math.random(); return r < 0.55 ? "fight" : r < 0.82 ? "elite" : "green"; };
+  opts.add("fight"); let guard = 0; while (opts.size < 2 && guard++ < 20) opts.add(roll());
+  if (next === 11 && !opts.has("green")) { opts.delete([...opts].find(o => o !== "fight") || "fight"); opts.add("green"); }
+  return [...opts];
+}
+const DOOR = {
+  fight: ["Fight", "A standard room. Normal reward."],
+  elite: ["Elite", "Tougher room with an elite enemy. Set pieces likely."],
+  green: ["Green Room", "No fight. Repair 35% hull and pick an upgrade."],
+  mini: ["Mini-boss", "Overdrive guards the end of Act I."],
+  boss: ["The Mute", "The final boss. It wants your song gone."],
+};
+function showDoors() {
+  run.mode = "choice";
+  const opts = doorOptions();
+  showScreen(`<div class="panel"><div><h2>Choose the next door</h2><p>Room ${run.room + 1} of 12. Hull ${Math.round(P.hp)}/${P.maxHp}.</p></div>
+    <div class="cards">${opts.map((o, i) => `<button class="card" type="button" data-o="${o}" style="--c:${o === "elite" ? "#ff9b54" : o === "green" ? "#5ee0a0" : o === "boss" || o === "mini" ? "#ff5c8a" : "#8fb4ff"}"><span class="tag">${o === "mini" || o === "boss" ? "BOSS" : "ROOM " + (run.room + 1)}</span><b>${DOOR[o][0]}</b><span class="fx">${DOOR[o][1]}</span><kbd>${i + 1}</kbd></button>`).join("")}</div>
+    <div class="row-actions"><span id="idleNote" style="font-size:.8rem;color:var(--mute)"></span></div></div>`);
+  document.querySelectorAll(".card").forEach(b => b.addEventListener("click", () => startRoom(b.dataset.o)));
+  choiceState = null;
+  armIdle(() => startRoom(opts[0]));
+}
+function armIdle(fn) {
+  clearInterval(idleTimer);
+  if (!save.idle) return;
+  let left = 10;
+  const note = () => { const el = document.getElementById("idleNote"); if (el) el.textContent = `Idle mode: auto-pick in ${left} s`; };
+  note();
+  idleTimer = setInterval(() => { left--; note(); if (left <= 0) { clearInterval(idleTimer); fn(); } }, 1000);
+}
+
+// ---------- Screens ----------
+const screenEl = document.getElementById("screen");
+function showScreen(html) { screenEl.innerHTML = html; screenEl.hidden = false; const f = screenEl.querySelector(".card, .btn.primary"); if (f) f.focus({ preventScroll: true }); }
+function hideScreen() { clearInterval(idleTimer); screenEl.hidden = true; screenEl.innerHTML = ""; }
+function showHub() {
+  run = null; paused = false;
+  document.getElementById("hudTop").hidden = true; document.getElementById("hudBot").hidden = true;
+  const need = xpToNext(save.level), cap = layerCap(), bans = banSlots();
+  const all = [...BASE_POOL, "funk", "choir", "strings"];
+  showScreen(`<div class="panel">
+    <div><h1>The Great Warrior <span>Gig Run</span></h1><p>Pilot the Amp Rig through 12 rooms of the Static. Every power-up is a layer of the song, and every layer fires on its own notes.</p></div>
+    <div class="stat"><span>Account level <b>${effLevel()}</b></span><span>Royalties <b>${save.dev ? "∞" : save.royalties}</b></span><span>Band size <b>${BAND[cap]} (${cap} layers)</b></span><span>Runs <b>${save.runs}</b></span><span>Wins <b>${save.wins}</b></span><span>Best room <b>${save.bestRoom}</b></span></div>
+    <div class="bar xp" title="XP to next level"><i style="width:${save.dev ? 100 : Math.round(save.xp / need * 100)}%"></i></div>
+    <div class="row-actions"><button class="btn primary" id="startBtn" type="button">Start run <kbd>Enter</kbd></button>
+      <label class="check"><input type="checkbox" id="idleChk" ${save.idle ? "checked" : ""}> Idle mode: auto-pick rewards after 10 s</label>
+      <label class="check"><input type="checkbox" id="devChk" ${save.dev ? "checked" : ""}> Test mode: unlock everything</label></div>
+    <div class="cols">
+      <div class="list"><h3>Permanent unlocks</h3>${SHOP.map(s => { const n = save.owned[s.id] || 0, max = s.max || 1, done = save.dev || n >= max; return `<div class="item ${done ? "own" : ""}"><div><b>${s.name}${max > 1 ? ` ${save.dev ? max : n}/${max}` : ""}</b><span>${s.desc}</span></div>${done ? `<span style="font-size:.78rem;color:var(--ok)">Owned</span>` : `<button class="btn small" type="button" data-buy="${s.id}" ${save.royalties < s.cost ? "disabled" : ""}>${s.cost} R</button>`}</div>`; }).join("")}</div>
+      <div class="list"><h3>Level rewards</h3><div class="perks">${PERKS.map(([l, t]) => `<span class="${effLevel() >= l ? "got" : "next"}">Level ${l}: ${t}</span>`).join("")}</div>
+        <h3 style="margin-top:10px">Item bans ${save.bans.length}/${bans}</h3><p style="font-size:.8rem">Banned items never show up as rewards, so the rest come up more often.</p>
+        ${bans ? all.filter(id => BASE_POOL.includes(id) || owned(id)).map(id => { const b = save.bans.includes(id); return `<div class="item ${b ? "ban" : ""}"><div><b>${byId(id).power}</b><span>${byId(id).layer}</span></div><button class="btn small" type="button" data-ban="${id}" ${!b && save.bans.length >= bans ? "disabled" : ""}>${b ? "Unban" : "Ban"}</button></div>`; }).join("") : `<p style="font-size:.8rem">Unlocks at account level 3.</p>`}
+      </div>
+      <div class="list"><h3>How to play</h3><div class="keys">
+        <span>Leave the controls alone and the Rig fights on <b>autopilot</b> at 60% power.</span>
+        <span>Touch <kbd>WASD</kbd> or arrows (or drag on a touch screen) to <b>take control</b>: rock drums drop in on the next bar and the Rig hits at 100%.</span>
+        <span>Mouse aims while piloting. <kbd>Space</kbd> or right-click dashes through bullets.</span>
+        <span>Only the small glowing core of the Rig can be hit.</span>
+        <span>Getting hit triggers <b>Dropout</b>: your newest layer and its weapon cut out for 2 bars.</span>
+        <span>A full 7-piece set: <kbd>X</kbd> for its special. 10 s invincible, 30 s cooldown (45 s in boss rooms).</span>
+        <span><kbd>Esc</kbd> pauses. Rewards: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>.</span>
+        <span>Progress is saved in this browser only.</span></div></div>
+    </div></div>`);
+  document.getElementById("startBtn").addEventListener("click", async () => { await startAudio(); newRun(); });
+  document.getElementById("idleChk").addEventListener("change", e => { save.idle = e.target.checked; persist(); });
+  document.getElementById("devChk").addEventListener("change", e => { save.dev = e.target.checked; persist(); showHub(); });
+  screenEl.querySelectorAll("[data-buy]").forEach(b => b.addEventListener("click", () => { const s = SHOP.find(x => x.id === b.dataset.buy); if (save.royalties >= s.cost) { save.royalties -= s.cost; save.owned[s.id] = (save.owned[s.id] || 0) + 1; persist(); showHub(); } }));
+  screenEl.querySelectorAll("[data-ban]").forEach(b => b.addEventListener("click", () => { const id = b.dataset.ban; const i = save.bans.indexOf(id); if (i >= 0) save.bans.splice(i, 1); else if (save.bans.length < banSlots()) save.bans.push(id); persist(); showHub(); }));
+}
+function showSummary(r) {
+  run = null;
+  document.getElementById("hudTop").hidden = true; document.getElementById("hudBot").hidden = true;
+  const lv = r.after > r.before ? `<p class="lvup">Account level ${r.before} → ${r.after}. ${PERKS.filter(([l]) => l > r.before && l <= r.after).map(p => p[1]).join(". ") || "Keep going for the next band size."}</p>` : "";
+  showScreen(`<div class="panel"><div><h2>${r.won ? "The Mute is silenced. The song plays on." : "The Rig went quiet in room " + r.room}</h2><p>${r.won ? "Full run cleared." : "Every run still pays out."}</p></div>
+    <div class="summary-big">+${r.xp} XP · +${r.roy} Royalties</div>${lv}
+    <div class="stat"><span>Rooms cleared <b>${r.roomsCleared}</b></span><span>Static silenced <b>${r.kills}</b></span><span>Time <b>${Math.floor(r.secs / 60)}:${String(r.secs % 60).padStart(2, "0")}</b></span></div>
+    <div class="row-actions"><button class="btn primary" id="againBtn" type="button">Run again <kbd>Enter</kbd></button><button class="btn" id="hubBtn" type="button">Back to the hub</button></div></div>`);
+  document.getElementById("againBtn").addEventListener("click", () => newRun());
+  document.getElementById("hubBtn").addEventListener("click", showHub);
+}
+function togglePause() {
+  if (!run || run.mode !== "fight") return;
+  paused = !paused;
+  if (paused) { Tone.Transport.pause(); if (amb) amb.bus.gain.rampTo(0, 0.2); showScreen(`<div class="panel" style="width:min(420px,100%)"><h2>Paused</h2><div class="row-actions"><button class="btn primary" id="resumeBtn" type="button">Resume <kbd>Esc</kbd></button><button class="btn" id="quitBtn" type="button">End run</button></div></div>`);
+    document.getElementById("resumeBtn").addEventListener("click", togglePause);
+    document.getElementById("quitBtn").addEventListener("click", () => { paused = false; Tone.Transport.start(); if (amb) amb.bus.gain.rampTo(1, 0.4); hideScreen(); run.mode = "fight"; endRun(false); }); }
+  else { Tone.Transport.start(); if (amb) amb.bus.gain.rampTo(1, 0.4); hideScreen(); }
+}
+let bannerT;
+function banner(t, sub) { const b = document.getElementById("banner"); b.innerHTML = t + (sub ? `<small>${sub}</small>` : ""); b.classList.add("show"); clearTimeout(bannerT); bannerT = setTimeout(() => b.classList.remove("show"), 2200); }
+
+// =====================================================================
+// Simulation (fixed 120 Hz steps so fast bullets and dashes never skip a hit)
+// =====================================================================
+let hitFlash = 0;
+function damagePlayer(dmg, src) {
+  if (invulnerable()) return false;
+  const now = performance.now();
+  const taken = dmg * (waistPiece() ? 0.85 : 1);
+  P.hp -= taken; P.hitUntil = now + 750;
+  texts.push({ x: P.x, y: P.y - 30, s: "-" + Math.round(taken), t: 0, color: "#ff5c8a" });
+  if (nodes) nodes.hitfx.triggerAttackRelease("8n", Tone.now() + 0.01, 0.9);
+  shake(7); hitFlash = 1;
+  dropout(src === "wave" ? 2 : 1);
+  if (P.hp <= 0) { P.hp = 0; endRun(false); }
+  return true;
+}
+
+function autopilot() {
+  let mx = 0, my = 0;
+  const t = nearest(P.x, P.y);
+  if (t) {
+    const dx = t.x - P.x, dy = t.y - P.y, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
+    const melee = active("flute") || active("drop") || active("funk") || active("taiko");
+    const want = melee ? (t.boss ? 120 + t.r : 95 + t.r) : t.boss ? 300 : t.type === "hiss" ? 230 : 210;
+    const radial = clamp((d - want) / want, -1, 1);
+    mx += ux * radial * 1.2 - uy * 0.55 * strafeDir; my += uy * radial * 1.2 + ux * 0.55 * strafeDir;
+  } else { mx += (AW / 2 - P.x) / 200; my += (AH * 0.6 - P.y) / 200; }
+  if (!(performance.now() < P.gongUntil)) for (const b of bullets) {
+    const dx = P.x - b.x, dy = P.y - b.y, d = Math.hypot(dx, dy);
+    if (d > 140) continue;
+    if (dx * b.vx + dy * b.vy <= 0) continue;
+    const sp = Math.hypot(b.vx, b.vy) || 1, px = -b.vy / sp, py = b.vx / sp, side = Math.sign(dx * px + dy * py) || 1, w = 2.2 * (1 - d / 140);
+    mx += px * side * w; my += py * side * w;
+  }
+  for (const e of enemies) { if (!e.alive || !e.on) continue; const dx = P.x - e.x, dy = P.y - e.y, d = Math.hypot(dx, dy); const lim = e.r + (active("flute") || active("drop") || active("funk") || active("taiko") ? 34 : 70) + (e.dash > 0 ? 60 : 0); if (d < lim) { mx += dx / d * 3.2 * (1 - d / lim); my += dy / d * 3.2 * (1 - d / lim); } }
+  for (const f of fx) if (f.k === "wave") { const d = Math.hypot(P.x - f.x, P.y - f.y); if (d > f.r - 10 && d - f.r < 120) { const gx = f.x + Math.cos(f.gap) * d, gy = f.y + Math.sin(f.gap) * d; mx += (gx - P.x) / 60; my += (gy - P.y) / 60; } }
+  const m = 70;
+  if (P.x < m) mx += (m - P.x) / m * 2; if (P.x > AW - m) mx -= (P.x - (AW - m)) / m * 2;
+  if (P.y < m) my += (m - P.y) / m * 2; if (P.y > AH - m) my -= (P.y - (AH - m)) / m * 2;
+  if (P.x < m * 1.4 || P.x > AW - m * 1.4) if (Math.random() < 0.01) strafeDir *= -1;
+  const L = Math.hypot(mx, my);
+  return L > 0.15 ? { x: mx / L, y: my / L } : { x: 0, y: 0 };
+}
+function inputVec() {
+  let x = 0, y = 0;
+  if (keys.has("left")) x -= 1; if (keys.has("right")) x += 1; if (keys.has("up")) y -= 1; if (keys.has("down")) y += 1;
+  if (joy && joy.active) { x += joy.dx; y += joy.dy; }
+  const L = Math.hypot(x, y); return L > 0.15 ? { x: x / Math.max(1, L), y: y / Math.max(1, L), any: true } : { x: 0, y: 0, any: false };
+}
+function dash() {
+  if (!run || run.mode !== "fight") return;
+  markInput();
+  if (P.dashCd > 0) { dashBuffer = 0.15; return; }   // pressed a moment early: dash as soon as it's ready
+  const v = inputVec();
+  const a = v.any ? Math.atan2(v.y, v.x) : (mouse.inside && piloting() ? Math.atan2(mouse.y - P.y, mouse.x - P.x) : P.face);
+  P.dashT = 0.16; P.dashCd = 0.85; P.dvx = Math.cos(a) * 780; P.dvy = Math.sin(a) * 780;
+  fx.push({ k: "ring", x: P.x, y: P.y, r: 26, t: 0, life: 0.25, color: "#ff5c8a" });
+}
+
+function update(dt) {
+  const now = performance.now();
+  const v = inputVec();
+  if (v.any) markInput();
+  const wantPilot = now - lastInput < 3000;
+  if (wantPilot !== byId("rock").wanted) wantPilot ? stemOn("rock") : stemOff("rock");
+
+  P.dashCd = Math.max(0, P.dashCd - dt);
+  if (dashBuffer > 0) { dashBuffer -= dt; if (P.dashCd <= 0) { dashBuffer = 0; dash(); } }
+  if (P.dashT > 0) { P.dashT -= dt; P.x += P.dvx * dt; P.y += P.dvy * dt; }
+  else {
+    const mv = wantPilot ? v : autopilot();
+    const spd = wantPilot ? 285 : 215;
+    P.x += mv.x * spd * dt; P.y += mv.y * spd * dt;
+  }
+  P.x = clamp(P.x, P.r, AW - P.r); P.y = clamp(P.y, P.r, AH - P.r);
+  const ta = aimAngle(), da = Math.atan2(Math.sin(ta - P.face), Math.cos(ta - P.face)); P.face += da * Math.min(1, dt * 18);
+
+  for (const e of enemies) {
+    if (!e.alive || !e.on) continue;
+    e.flash = Math.max(0, e.flash - dt); e.wob += dt;
+    const a = Math.atan2(P.y - e.y, P.x - e.x), d = Math.hypot(P.x - e.x, P.y - e.y);
+    const edt = now < (e.stunUntil || 0) ? 0 : now < (e.chillUntil || 0) ? dt * 0.75 : dt;
+    if (e.burn && now < e.burnUntil) { e.burnAcc = (e.burnAcc || 0) + BURN_DPS * e.burn * dt; if (e.burnAcc >= 4) { const b = e.burnAcc; e.burnAcc = 0; hurt(e, b, "#ff7a3c"); } } else if (e.burn) e.burn = 0;
+    if (!e.alive) continue;
+    if (e.dash > 0) { e.dash -= edt; e.x += e.dvx * edt; e.y += e.dvy * edt; }
+    else if (e.type === "hiss") { e.x += Math.cos(a + Math.sin(e.wob * 3) * 0.4) * e.spd * edt; e.y += Math.sin(a + Math.sin(e.wob * 3) * 0.4) * e.spd * edt; }
+    else if (e.type === "crackle") { const k = d > 280 ? 1 : d < 200 ? -1 : 0; e.x += (Math.cos(a) * k + Math.cos(a + 1.57) * 0.4 * (e.phase ? 1 : -1)) * e.spd * edt; e.y += (Math.sin(a) * k + Math.sin(a + 1.57) * 0.4 * (e.phase ? 1 : -1)) * e.spd * edt; }
+    else if (e.type === "mute") { const tx = AW / 2 + Math.cos(e.wob * 0.5) * AW * 0.28, ty = AH * 0.25 + Math.sin(e.wob * 0.8) * 50; e.x += (tx - e.x) * edt; e.y += (ty - e.y) * edt; }
+    else { e.x += Math.cos(a) * e.spd * edt; e.y += Math.sin(a) * e.spd * edt; }
+    e.x = clamp(e.x, e.r, AW - e.r); e.y = clamp(e.y, e.r, AH - e.r);
+    if (d < e.r * 0.85 + HURT + 3) damagePlayer(e.dmg, "touch");
+  }
+  for (let i = 0; i < enemies.length; i++) for (let j = i + 1; j < enemies.length; j++) {
+    const a = enemies[i], b = enemies[j]; if (!a.alive || !b.alive) continue;
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, o = a.r + b.r - d;
+    if (o > 0) { const ux = dx / d, uy = dy / d, wa = a.boss ? 0 : b.boss ? 1 : 0.5; a.x -= ux * o * wa; a.y -= uy * o * wa; b.x += ux * o * (1 - wa); b.y += uy * o * (1 - wa); }
+  }
+
+  for (const s of shots) {
+    s.t += dt; s.life -= dt;
+    if (s.homing) { const t = nearest(s.x, s.y, 400); if (t) { const want = Math.atan2(t.y - s.y, t.x - s.x), cur = Math.atan2(s.vy, s.vx), sp = Math.hypot(s.vx, s.vy); const nd = cur + clamp(Math.atan2(Math.sin(want - cur), Math.cos(want - cur)), -s.homing * dt, s.homing * dt); s.vx = Math.cos(nd) * sp; s.vy = Math.sin(nd) * sp; } }
+    s.x += s.vx * dt; s.y += s.vy * dt;
+    if (s.x < -20 || s.y < -20 || s.x > AW + 20 || s.y > AH + 20) s.life = 0;
+    for (const e of enemies) {
+      if (s.life <= 0) break;
+      if (!e.alive || !e.on || s.hit.has(e)) continue;
+      if (Math.hypot(e.x - s.x, e.y - s.y) < e.r + s.r) { withEl(s.el, () => hurt(e, s.dmg, s.color)); s.hit.add(e); if (s.knock && !e.boss) { const sp = Math.hypot(s.vx, s.vy) || 1; e.x += s.vx / sp * s.knock; e.y += s.vy / sp * s.knock; } if (s.pierce-- <= 0) s.life = 0; }
+    }
+  }
+  shots = shots.filter(s => s.life > 0);
+  for (const b of bullets) {
+    b.life -= dt; b.x += b.vx * dt; b.y += b.vy * dt;
+    if (b.x < -20 || b.y < -20 || b.x > AW + 20 || b.y > AH + 20) b.life = 0;
+    if (b.life > 0 && Math.hypot(b.x - P.x, b.y - P.y) < b.r * 0.7 + HURT) { if (damagePlayer(b.dmg, "bullet")) b.life = 0; }
+  }
+  bullets = bullets.filter(b => b.life > 0);
+  for (const f of fx) {
+    f.t += dt;
+    if (f.k === "spark") { f.x += f.vx * dt; f.y += f.vy * dt; f.vx *= Math.pow(0.0066, dt); f.vy *= Math.pow(0.0066, dt); }
+    if (f.follow) { f.x = P.x; f.y = P.y; }
+    if (f.k === "wave") {
+      f.r += 230 * dt;
+      const d = Math.hypot(P.x - f.x, P.y - f.y);
+      if (!f.hit && Math.abs(d - f.r) < 8 + HURT) {
+        let da2 = Math.atan2(P.y - f.y, P.x - f.x) - f.gap; da2 = Math.atan2(Math.sin(da2), Math.cos(da2));
+        if (Math.abs(da2) > f.gw / 2) { if (damagePlayer(14, "wave")) f.hit = true; }
+      }
+      if (f.r > Math.hypot(AW, AH)) f.t = f.life;
+    }
+  }
+  fx = fx.filter(f => f.t < f.life || (f.k === "spawn" && run.spawnPending));
+  for (const t of texts) t.t += dt;
+  texts = texts.filter(t => t.t < 0.8);
+
+  if ((run.spawnPending || run.pendingReward) && now - Math.max(lastBarAt, run.roomStart || 0) > 2600) { ensureAudio(); barLine(-1); }
+  if (!run.fightOver && !run.spawnPending && run.mode === "fight") {
+    const alive = enemies.filter(e => e.alive);
+    if (run.waves.length && alive.length <= 2) spawnWave();
+    else if (!alive.length && !run.waves.length) roomCleared();
+  }
+  enemies = enemies.filter(e => e.alive);
+}
+
+// =====================================================================
+// Drawing
+// =====================================================================
+function liveLayerCount() { return layers().filter(s => s.state === "on").length; }
+function draw(dt) {
+  const { dpr, s, ox, oy } = view;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = "#100e18"; ctx.fillRect(0, 0, view.w, view.h);
+  shakeAmt *= Math.pow(0.02, dt); beatPulse *= Math.pow(0.004, dt); hitFlash *= Math.pow(0.01, dt);
+  const sx = (Math.random() - 0.5) * shakeAmt, sy = (Math.random() - 0.5) * shakeAmt;
+  ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (ox + sx), dpr * (oy + sy));
+
+  const live = run ? liveLayerCount() : 0, sat = Math.min(live, 6) / 6, pil = piloting();
+  ctx.fillStyle = "#15121f"; ctx.fillRect(0, 0, AW, AH);
+  const lights = [["#3dd6ff", 0.15, 0.05], ["#ffd166", 0.85, 0.05], ["#ff5c8a", 0.5, 1.1]];
+  for (const [c, lx, ly] of lights) {
+    const g = ctx.createRadialGradient(AW * lx, AH * ly, 10, AW * lx, AH * ly, AW * 0.7);
+    g.addColorStop(0, hexA(c, 0.05 + 0.32 * sat + (pil ? 0.06 : 0))); g.addColorStop(1, hexA(c, 0));
+    ctx.fillStyle = g; ctx.fillRect(0, 0, AW, AH);
+  }
+  ctx.strokeStyle = hexA(pil ? "#ff5c8a" : "#6a6190", 0.12 + 0.18 * beatPulse); ctx.lineWidth = 1;
+  ctx.beginPath(); for (let x = 0; x <= AW; x += 50) { ctx.moveTo(x, 0); ctx.lineTo(x, AH); } for (let y = 0; y <= AH; y += 50) { ctx.moveTo(0, y); ctx.lineTo(AW, y); } ctx.stroke();
+  ctx.strokeStyle = hexA("#ffd166", 0.25 + 0.4 * beatPulse); ctx.lineWidth = 3; ctx.strokeRect(1.5, 1.5, AW - 3, AH - 3);
+
+  for (const f of fx) {
+    const k = f.t / f.life;
+    if (f.k === "spawn") { ctx.strokeStyle = hexA(f.color, 0.4 + 0.4 * beatPulse); ctx.setLineDash([6, 6]); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (0.6 + 0.4 * beatPulse), 0, 7); ctx.stroke(); ctx.setLineDash([]); }
+    else if (f.k === "wave") {
+      ctx.strokeStyle = hexA("#b18cff", 0.35); ctx.lineWidth = 16; ctx.beginPath(); ctx.arc(f.x, f.y, f.r, f.gap + f.gw / 2, f.gap - f.gw / 2 + Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = hexA("#ffffff", 0.9); ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(f.x, f.y, f.r, f.gap + f.gw / 2, f.gap - f.gw / 2 + Math.PI * 2); ctx.stroke();
+    }
+    else if (f.k === "slam") { ctx.fillStyle = hexA(f.color, 0.35 * (1 - k)); ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (0.4 + 0.6 * k), 0, 7); ctx.fill(); }
+  }
+  for (const e of enemies) {
+    if (!e.alive || !e.on) continue;
+    if (e.tele && (e.type === "clipper" || e.type === "overdrive")) { ctx.strokeStyle = hexA(e.color, 0.55); ctx.lineWidth = 2; ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + Math.cos(e.lock) * 260, e.y + Math.sin(e.lock) * 260); ctx.stroke(); ctx.setLineDash([]); }
+  }
+
+  // enemies: drawn at their true position and size, so what you see is what can touch you
+  for (const e of enemies) {
+    if (!e.alive) continue;
+    ctx.save(); ctx.translate(e.x, e.y);
+    ctx.globalAlpha = e.on ? 1 : 0.35;
+    const a = Math.atan2(P.y - e.y, P.x - e.x);
+    const nowS = performance.now(), chilled = nowS < (e.chillUntil || 0), stunned = nowS < (e.stunUntil || 0), burning = e.burn && nowS < e.burnUntil;
+    ctx.fillStyle = e.flash > 0 ? "#ffffff" : chilled ? "#1f3346" : "#221a2e"; ctx.strokeStyle = stunned ? EL.lightning.color : burning && Math.floor(nowS / 90) % 2 ? EL.fire.color : chilled ? EL.cold.color : e.color; ctx.lineWidth = e.elite || e.boss ? 3 : 2;
+    ctx.beginPath();
+    const R = e.r;
+    if (e.type === "hiss") { ctx.rotate(a); ctx.moveTo(R, 0); ctx.lineTo(-R, R * 0.8); ctx.lineTo(-R * 0.5, 0); ctx.lineTo(-R, -R * 0.8); }
+    else if (e.type === "crackle") { ctx.rotate(e.wob * 2); ctx.moveTo(R, 0); ctx.lineTo(0, R); ctx.lineTo(-R, 0); ctx.lineTo(0, -R); }
+    else if (e.type === "clipper") { ctx.rotate(e.tele || e.dash > 0 ? e.lock : a); ctx.moveTo(R * 1.2, 0); ctx.lineTo(-R, R); ctx.lineTo(-R * 0.4, 0); ctx.lineTo(-R, -R); }
+    else { const sides = e.type === "drone" ? 6 : e.type === "overdrive" ? 8 : 10; ctx.rotate(e.wob * (e.boss ? 0.4 : 0.8)); for (let i = 0; i < sides; i++) { const ang = i / sides * Math.PI * 2, rr2 = R * (e.boss ? (i % 2 ? 0.88 : 1) : 1); ctx.lineTo(Math.cos(ang) * rr2, Math.sin(ang) * rr2); } }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (e.tele && (e.type === "crackle" || e.type === "drone" || e.type === "mute")) { ctx.strokeStyle = hexA(e.color, 0.8); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, R + 6 + 6 * beatPulse, 0, 7); ctx.stroke(); }
+    ctx.strokeStyle = hexA(e.color, 0.45); ctx.lineWidth = 1;
+    const yy = Math.sin(e.wob * 9) * R * 0.6; ctx.beginPath(); ctx.moveTo(-R * 0.6, yy); ctx.lineTo(R * 0.6, yy); ctx.stroke();
+    ctx.restore();
+    if (!e.boss && e.hp < e.maxHp) { ctx.fillStyle = "#2f2a44"; ctx.fillRect(e.x - e.r, e.y - e.r - 8, e.r * 2, 3); ctx.fillStyle = e.color; ctx.fillRect(e.x - e.r, e.y - e.r - 8, e.r * 2 * Math.max(0, e.hp / e.maxHp), 3); }
+  }
+
+  drawRig();
+
+  ctx.globalCompositeOperation = "lighter";
+  for (const sh of shots) {
+    if (sh.plasma) { const a = Math.atan2(sh.vy, sh.vx), px = -Math.sin(a) * sh.plasma / 2, py = Math.cos(a) * sh.plasma / 2, k = 1 - sh.t / (sh.t + sh.life);
+      ctx.lineCap = "round"; ctx.strokeStyle = hexA(sh.color, 0.35 * k + 0.2); ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(sh.x - px, sh.y - py); ctx.lineTo(sh.x + px, sh.y + py); ctx.stroke();
+      ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(sh.x - px * 0.9, sh.y - py * 0.9); ctx.lineTo(sh.x + px * 0.9, sh.y + py * 0.9); ctx.stroke(); continue; }
+    if (sh.streak) { ctx.strokeStyle = sh.color; ctx.lineWidth = sh.r; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(sh.x, sh.y); ctx.lineTo(sh.x - sh.vx * 0.03, sh.y - sh.vy * 0.03); ctx.stroke(); }
+    else { ctx.fillStyle = hexA(sh.color, 0.3); ctx.beginPath(); ctx.arc(sh.x, sh.y, sh.r * 2, 0, 7); ctx.fill(); ctx.fillStyle = sh.color; ctx.beginPath(); ctx.arc(sh.x, sh.y, sh.r, 0, 7); ctx.fill(); }
+  }
+  for (const f of fx) {
+    const k = f.t / f.life;
+    if (f.k === "ring") { ctx.strokeStyle = hexA(f.color, 0.8 * (1 - k)); ctx.lineWidth = 4 * (1 - k) + 1; ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (0.3 + 0.7 * Math.sqrt(k)), 0, 7); ctx.stroke(); }
+    else if (f.k === "line") { ctx.strokeStyle = hexA(f.color, 1 - k); ctx.lineWidth = f.w; ctx.beginPath(); ctx.moveTo(f.x, f.y); const segs = 5; for (let i = 1; i <= segs; i++) { const tt = i / segs; ctx.lineTo(f.x + (f.x2 - f.x) * tt + (i < segs ? (Math.random() - 0.5) * 14 : 0), f.y + (f.y2 - f.y) * tt + (i < segs ? (Math.random() - 0.5) * 14 : 0)); } ctx.stroke(); }
+    else if (f.k === "crescent") { const sw = f.s * 2, a0 = f.a - f.s + sw * Math.min(1, k * 1.6);
+      ctx.strokeStyle = hexA(f.color, 0.9 * (1 - k)); ctx.lineCap = "round";
+      ctx.lineWidth = 10; ctx.beginPath(); ctx.arc(f.x, f.y, f.r * 0.82, f.a - f.s, a0); ctx.stroke();
+      ctx.lineWidth = 3; ctx.strokeStyle = hexA("#ffffff", 0.8 * (1 - k)); ctx.beginPath(); ctx.arc(f.x, f.y, f.r * 0.92, f.a - f.s * 0.8, a0); ctx.stroke(); }
+    else if (f.k === "pbeam") { const ex = f.x + Math.cos(f.a) * f.r, ey = f.y + Math.sin(f.a) * f.r, sx2 = f.x + Math.cos(f.a) * 16, sy2 = f.y + Math.sin(f.a) * 16, fl = 0.85 + Math.random() * 0.3;
+      ctx.lineCap = "round"; ctx.strokeStyle = hexA(f.color, 0.45 * (1 - k)); ctx.lineWidth = f.w * 1.6 * fl; ctx.beginPath(); ctx.moveTo(sx2, sy2); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.strokeStyle = hexA(f.color, 0.9 * (1 - k)); ctx.lineWidth = f.w * 0.6; ctx.beginPath(); ctx.moveTo(sx2, sy2); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.strokeStyle = hexA("#ffffff", 0.9 * (1 - k)); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(sx2, sy2); ctx.lineTo(ex, ey); ctx.stroke(); }
+    else if (f.k === "stab") { ctx.strokeStyle = hexA(f.color, 1 - k); ctx.lineCap = "round"; ctx.lineWidth = 5; const r0 = 18 + f.r * 0.7 * Math.min(1, k * 3); ctx.beginPath(); ctx.moveTo(f.x + Math.cos(f.a) * 18, f.y + Math.sin(f.a) * 18); ctx.lineTo(f.x + Math.cos(f.a) * (r0 + f.r * 0.3), f.y + Math.sin(f.a) * (r0 + f.r * 0.3)); ctx.stroke(); }
+    else if (f.k === "cone") { ctx.fillStyle = hexA(f.color, 0.28 * (1 - k)); ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.arc(f.x, f.y, f.r, f.a - f.s, f.a + f.s); ctx.closePath(); ctx.fill(); }
+    else if (f.k === "spark") { ctx.fillStyle = hexA(f.color, 1 - k); ctx.fillRect(f.x - 2, f.y - 2, 4, 4); }
+  }
+  ctx.globalCompositeOperation = "source-over";
+  // enemy bullets: the bright core is the part that hurts
+  for (const b of bullets) { ctx.fillStyle = hexA(b.color, 0.22); ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 3, 0, 7); ctx.fill(); ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.7 + 1, 0, 7); ctx.fill(); ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.4, 0, 7); ctx.fill(); }
+  ctx.font = "600 15px Figtree, system-ui, sans-serif"; ctx.textAlign = "center";
+  for (const t of texts) { ctx.fillStyle = hexA(t.color, 1 - t.t / 0.8); ctx.fillText(t.s, t.x, t.y - t.t * 40); }
+
+  if (specialPhase === "windup") { ctx.fillStyle = "rgba(20,16,40,.35)"; ctx.fillRect(0, 0, AW, AH); }
+  if (specialPhase === "solo") { ctx.fillStyle = hexA(SETS[specialSet] ? SETS[specialSet].color : "#ffd166", 0.05 + 0.08 * beatPulse); ctx.fillRect(0, 0, AW, AH); }
+  if (hitFlash > 0.02) { ctx.fillStyle = hexA("#ff2846", 0.3 * hitFlash); ctx.fillRect(0, 0, AW, AH); }
+
+  // touch joystick
+  if (joy && joy.active) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const r = cv.getBoundingClientRect();
+    const x0 = joy.x0 - r.left, y0 = joy.y0 - r.top;
+    ctx.strokeStyle = "rgba(255,255,255,.25)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x0, y0, 56, 0, 7); ctx.stroke();
+    ctx.fillStyle = "rgba(255,92,138,.5)"; ctx.beginPath(); ctx.arc(x0 + joy.dx * 56, y0 + joy.dy * 56, 18, 0, 7); ctx.fill();
+  }
+}
+function drawRig() {
+  const now = performance.now();
+  ctx.save(); ctx.translate(P.x, P.y);
+  const inv = now < invulnUntil, gong = now < P.gongUntil, blink = now < P.hitUntil && Math.floor(now / 70) % 2 === 0;
+  if (blink) ctx.globalAlpha = 0.4;
+  if (inv) { ctx.fillStyle = hexA("#ffd166", 0.18 + 0.15 * beatPulse); ctx.beginPath(); ctx.arc(0, 0, 40, 0, 7); ctx.fill(); }
+  if (gong) { const k = (now - P.gongStart) / Math.max(1, P.gongUntil - P.gongStart); ctx.strokeStyle = hexA(byId("pads").color, 0.9 - 0.5 * k); ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, 0, 30, 0, 7); ctx.stroke(); ctx.fillStyle = hexA(byId("pads").color, 0.15 * (1 - k)); ctx.fill(); }
+  if (P.dashCd > 0) { ctx.strokeStyle = "rgba(255,92,138,.5)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 24, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - P.dashCd / 0.85)); ctx.stroke(); }
+  const b = 1 + beatPulse * 0.05; ctx.save(); ctx.scale(b, b); ctx.rotate(P.face);
+  const part = (fill, glow) => { ctx.fillStyle = fill; ctx.strokeStyle = glow ? "#ffffff" : "#6a6190"; ctx.lineWidth = 1.4; };
+  const stemCol = id => { const s = byId(id); return s.state === "on" ? s.color : s.state === "dropped" ? (Math.floor(now / 90) % 2 ? s.color : "#2b2540") : null; };
+  const armor = body => { const id = [...equipped].find(g => PIECE[g].body === body); return id ? SETS[PIECE[id].set].color : null; };
+  // back (cape)
+  const back = armor("back"); if (back) { part(hexA(back, 0.6)); rr(-24, -14, 8, 28, 3); }
+  // legs (base beat, armor tints them)
+  const legs = armor("legs");
+  part(legs || stemCol("beat") || "#2b2540", !!legs); rr(-20, -13, 10, 9, 2); rr(-20, 4, 10, 9, 2);
+  // torso + waist armor
+  const waist = armor("waist");
+  part("#2b2540"); rr(-13, -15, 26, 30, 6);
+  if (waist) { ctx.strokeStyle = waist; ctx.lineWidth = 3; ctx.strokeRect(-12, -14, 24, 28); }
+  if (fullSet) { ctx.strokeStyle = SETS[fullSet].color; ctx.lineWidth = 2.5; ctx.strokeRect(-15, -17, 30, 34); }
+  // core rune
+  const core = run ? [...run.lv.keys()].find(id => SLOT_OF[id] === "core") : null; const cc = core && stemCol(core);
+  part(cc || "#2b2540", !!cc); ctx.beginPath(); ctx.arc(-3, 0, 5, 0, 7); ctx.fill(); ctx.stroke();
+  // shoulder speakers (charms) and forearm armor
+  const charms = run ? [...run.lv.keys()].filter(id => SLOT_OF[id] === "speakers") : [];
+  [[-6, -24], [-6, 14]].forEach(([x, y], i) => { const c = charms[i] && stemCol(charms[i]); part(c || "#2b2540", !!c); rr(x - 5, y, 12, 10, 2); });
+  const arms = armor("arms"); if (arms) { part(arms, true); rr(8, -24, 8, 5, 2); rr(8, 19, 8, 5, 2); }
+  const sh = run && run.lv.has("pads") && stemCol("pads");
+  if (sh) { part(sh, true); rr(4, -28, 14, 5, 2); }
+  // hands: weapons
+  const items = run ? handItems() : []; let hand = 0;
+  for (const it of items) {
+    for (let h = 0; h < it.hands; h++) {
+      const y = hand === 0 ? 18 : -18; hand++;
+      const col = it.kind === "layer" ? stemCol(it.id) : SETS[PIECE[it.id].set].color;
+      if (!col) continue;
+      ctx.strokeStyle = col; ctx.lineWidth = it.kind === "gear" ? 5 : 3.5; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(8, y); ctx.lineTo(it.kind === "gear" && it.hands === 2 ? 40 : 32, y * (it.hands === 2 ? 0.2 : 0.9)); ctx.stroke();
+      if (specialPhase === "solo" && it.kind === "gear") { ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 8; ctx.globalAlpha = 0.35; ctx.stroke(); ctx.globalAlpha = blink ? 0.4 : 1; }
+      if (it.hands === 2) break;
+    }
+  }
+  // head armor and visor (lights up in pilot mode)
+  const head = armor("head"); if (head) { part(head, true); rr(4, -9, 5, 18, 2); }
+  const pil = piloting(), queued = byId("rock").state === "queued";
+  ctx.fillStyle = pil ? "#ff5c8a" : queued ? (Math.floor(now / 120) % 2 ? "#ff5c8a" : "#3a3150") : "#3a3150";
+  ctx.strokeStyle = "#6a6190"; rr(9, -7, 6, 14, 2);
+  ctx.restore();
+  // hitbox core: the only part of the Rig that can be hit
+  ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(0, 0, HURT - 2, 0, 7); ctx.fill();
+  ctx.strokeStyle = pil ? "#ff5c8a" : "#ffd166"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, HURT, 0, 7); ctx.stroke();
+  ctx.restore();
+}
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); ctx.fill(); ctx.stroke(); }
+const hexCache = {};
+function hexA(hex, a) {
+  let c = hexCache[hex]; if (!c) { const h = hex.replace("#", ""); c = hexCache[hex] = [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+  return `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
+}
+
+// ---------- HUD ----------
+const $ = id => document.getElementById(id);
+let hudCache = {};
+function setText(id, v) { if (hudCache[id] !== v) { hudCache[id] = v; $(id).textContent = v; } }
+function setHTML(id, v) { if (hudCache[id] !== v) { hudCache[id] = v; $(id).innerHTML = v; } }
+function hud() {
+  if (!run) return;
+  setText("hpTxt", `${Math.ceil(P.hp)} / ${P.maxHp}`);
+  $("hpBar").style.width = (P.hp / P.maxHp * 100).toFixed(1) + "%";
+  const now = performance.now();
+  setText("shieldTxt", run.lv.has("pads") ? (now < P.gongUntil ? "Gong: invulnerable" : `Gong every ${LV("pads") === 1 ? "2 bars" : "bar"}`) : "No gong");
+  setText("layerTxt", `Layers ${run.lv.size} / ${layerCap()}`);
+  setText("roomTxt", run.room ? `Room ${run.room} · Act ${run.act === 1 ? "I" : "II"}` : "Opening pick");
+  const lab = { fight: "F", elite: "E", green: "G", mini: "M", boss: "B" };
+  let m = ""; for (let i = 1; i <= 12; i++) { const t = run.path[i - 1] || (i === 6 ? "mini" : i === 12 ? "boss" : ""); m += `<i class="${i < run.room ? "done" : i === run.room ? "now" : ""} ${i === 6 || i === 12 ? "boss" : ""}" title="Room ${i}">${lab[t] || ""}</i>`; }
+  setHTML("map", m);
+  const boss = enemies.find(e => e.boss && e.alive);
+  $("bossWrap").hidden = !boss; if (boss) $("bossBar").style.width = (boss.hp / boss.maxHp * 100).toFixed(1) + "%";
+  const rock = byId("rock"), inv = invulnUntil - now;
+  const mp = inv > 0 ? `Invincible ${(inv / 1000).toFixed(1)} s` : rock.state === "on" ? (fullSet ? SETS[fullSet].name + " · set bonus" : "Pilot · 100%") : rock.state === "queued" ? "Pilot drops on the bar" : "Autopilot · 60%";
+  setText("modePill", mp);
+  $("modePill").className = "pill" + (inv > 0 ? " inv" : rock.state === "on" ? " pilot" : rock.state === "queued" ? " pilot queued" : "");
+  const rid = specialPhase ? specialSet : readySet(), cd = cooldownUntil - now;
+  const sp = $("specialBtn");
+  sp.disabled = !rid; sp.classList.toggle("live", !!specialPhase);
+  const label = specialLabel(rid);
+  setHTML("specialBtn", (!rid ? `Set special · ${bestSetCount()}/7` : specialPhase === "windup" ? "Time slowing..." : specialPhase === "solo" ? `${label}!` : specialPending ? "On the next bar" : cd > 0 ? `Recharging ${Math.ceil(cd / 1000)} s` : `${label} ready`) + " <kbd>X</kbd>");
+  let lo = "";
+  const order = [...run.lv.keys()].sort((a, b) => byId(a).order - byId(b).order);
+  for (const id of order) { const s = byId(id); lo += `<span class="chip ${s.state}" style="--c:${s.color}"><i></i><b>${s.power}</b><span>Lv ${run.lv.get(id)}${s.state === "dropped" ? " · dropout" : s.state === "queued" ? " · next bar" : ""}</span></span>`; }
+  for (let i = run.lv.size; i < layerCap(); i++) lo += `<span class="chip empty"><b>Open layer</b></span>`;
+  for (const sid in SETS) { const k = membersOf(sid).size; if (k) lo += `<span class="chip gear on" style="--c:${SETS[sid].color}"><i></i><b>${SETS[sid].name}</b><span>${k}/7${fullSet === sid ? " · bonus" : ""}</span></span>`; }
+  setHTML("loadout", lo);
+}
+function drawClock(step) {
+  curStep = step;
+  const inBar = step % BAR, beat = Math.floor(inBar / 4);
+  if (inBar % 4 === 0) { const pips = document.querySelectorAll("#pips i"); pips.forEach((p, i) => { p.classList.toggle("on", i === beat); p.classList.toggle("down", i === 0 && beat === 0); }); }
+  setText("chordTxt", chordAt(step).name);
+}
+
+// ---------- Input ----------
+const KEYMAP = { KeyW: "up", ArrowUp: "up", KeyS: "down", ArrowDown: "down", KeyA: "left", ArrowLeft: "left", KeyD: "right", ArrowRight: "right" };
+document.addEventListener("keydown", e => {
+  if (e.target.closest && e.target.closest("input")) return;
+  if (KEYMAP[e.code]) { keys.add(KEYMAP[e.code]); if (run && run.mode === "fight") { e.preventDefault(); markInput(); } return; }
+  if (e.code === "Escape") { togglePause(); return; }
+  if (run && run.mode === "fight" && !paused) {
+    if (e.code === "Space" || e.code === "ShiftLeft" || e.code === "ShiftRight") { e.preventDefault(); if (!e.repeat) dash(); }
+    else if (e.code === "KeyX") triggerSpecial();
+    return;
+  }
+  if (!screenEl.hidden) {
+    const n = +e.key;
+    if (n >= 1 && n <= 3) { const c = screenEl.querySelectorAll(".card")[n - 1]; if (c) { e.preventDefault(); c.click(); } }
+    else if (e.code === "KeyR") { const r = document.getElementById("rerollBtn"); if (r) r.click(); }
+    else if (e.code === "Enter" && !(e.target.closest && e.target.closest("button"))) { const p = screenEl.querySelector(".btn.primary"); if (p) { e.preventDefault(); p.click(); } }
+  }
+});
+document.addEventListener("keyup", e => { if (KEYMAP[e.code]) keys.delete(KEYMAP[e.code]); });
+window.addEventListener("blur", () => keys.clear());
+function toWorld(cx, cy) { const r = cv.getBoundingClientRect(); return { x: (cx - r.left - view.ox) / view.s, y: (cy - r.top - view.oy) / view.s }; }
+cv.addEventListener("mousemove", e => { const w = toWorld(e.clientX, e.clientY); mouse.x = w.x; mouse.y = w.y; mouse.t = performance.now(); mouse.inside = true; });
+cv.addEventListener("mouseleave", () => { mouse.inside = false; });
+cv.addEventListener("contextmenu", e => { if (run && run.mode === "fight") { e.preventDefault(); dash(); } });
+cv.addEventListener("touchstart", e => { if (!run || run.mode !== "fight") return; const t = e.changedTouches[0]; joy = { id: t.identifier, x0: t.clientX, y0: t.clientY, dx: 0, dy: 0, active: true }; e.preventDefault(); }, { passive: false });
+cv.addEventListener("touchmove", e => { if (!joy) return; for (const t of e.changedTouches) if (t.identifier === joy.id) { const dx = t.clientX - joy.x0, dy = t.clientY - joy.y0, L = Math.hypot(dx, dy); if (L > 6) { const k = Math.min(L, 56) / L / 56; joy.dx = dx * k; joy.dy = dy * k; markInput(); } else { joy.dx = 0; joy.dy = 0; } } e.preventDefault(); }, { passive: false });
+cv.addEventListener("touchend", e => { if (!joy) return; for (const t of e.changedTouches) if (t.identifier === joy.id) joy = null; });
+$("specialBtn").addEventListener("click", triggerSpecial);
+$("dashBtn").addEventListener("click", dash);
+$("pauseBtn").addEventListener("click", togglePause);
+
+// ---------- Main loop ----------
+let last = performance.now();
+function frame(ts) {
+  const dt = Math.min(0.05, (ts - last) / 1000); last = ts;
+  if (run && run.mode === "fight" && !paused) {
+    let left = dt * (specialPhase === "windup" ? 0.35 : 1);
+    while (left > 1e-6 && run && run.mode === "fight") { const h = Math.min(left, 1 / 120); update(h); left -= h; }
+  }
+  draw(dt);
+  hud();
+  requestAnimationFrame(frame);
+}
+resize();
+P.x = AW / 2; P.y = AH / 2;
+showHub();
+requestAnimationFrame(frame);
+document.addEventListener("visibilitychange", () => { if (document.hidden && run && run.mode === "fight" && !paused) togglePause(); });
+
+window.__game = { get run() { return run; }, get enemies() { return enemies; }, P, STEMS, byId, newRun, startAudio, startRoom, showChoices, pick, equipped, applyCard, save, SETS, PIECE, get bpm() { return Tone.Transport.bpm.value; }, get specialPhase() { return specialPhase; }, get specialSet() { return specialSet; }, triggerSpecial, endRun, membersOf };
+})();
+</script>
+
+</html>
