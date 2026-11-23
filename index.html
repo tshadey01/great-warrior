@@ -166,20 +166,151 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
   .panel { padding: 14px; }
 }
 @media (prefers-reduced-motion: reduce) { .chip i { animation: none !important; } }
+
+/* ===== UI pass (2026-11-23): corner HUD, band strip, radial cooldowns, stacked notices, build sheet, options =====
+   Conventions borrowed from Hades / Dead Cells (corner HUD, radial cooldowns), Balatro (one colour per meaning),
+   Vampire Survivors (effect options), Slay the Spire (always-visible path) and mobile thumb-zone norms. */
+html { font-size: calc(16px * var(--ui, 1)); }
+.hud.top { padding-top: max(10px, env(safe-area-inset-top, 0px)); grid-template-columns: auto 1fr auto; align-items: start; }
+.hud.bottom { padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)); }
+.tl { display: grid; gap: 6px; justify-items: start; }
+.tlrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tl .room { white-space: nowrap; font-family: var(--f-display); font-weight: 700; letter-spacing: .04em; font-size: .9rem; }
+.tr { display: flex; gap: 8px; align-items: center; justify-self: end; }
+.tr .pips span { font-family: var(--f-mono); font-size: .74rem; color: var(--gold); margin-left: 4px; }
+.rbtn { --rc: var(--line); --p: 1; position: relative; border: none; border-radius: 50%; padding: 0; display: grid; place-items: center; align-content: center;
+  background: conic-gradient(var(--rc) calc(var(--p) * 1turn), rgba(47,42,68,.9) 0); color: var(--ink); touch-action: manipulation; }
+.rbtn::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: #16131f; }
+.rbtn > * { position: relative; }
+.pausebtn { width: 2.75rem; height: 2.75rem; --rc: #4a4268; }
+.pausebtn svg { width: 14px; height: 14px; }
+.br { display: grid; gap: 8px; justify-items: end; }
+.actions { display: flex; gap: 10px; align-items: flex-end; }
+.rbtn.special { width: 4.5rem; height: 4.5rem; --rc: var(--gold); }
+.rbtn.special b { font-family: var(--f-display); font-size: 1rem; line-height: 1; }
+.rbtn.special span { font-size: .68rem; color: var(--mute); line-height: 1.1; }
+.rbtn.special kbd { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); font-family: var(--f-mono); font-size: .66rem; background: #16131f; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; color: var(--mute); }
+.rbtn.special:disabled { cursor: default; --rc: #3a3452; }
+.rbtn.special:disabled b { color: var(--mute); }
+.rbtn.special.charging b { color: var(--gold); opacity: .8; }
+.rbtn.special.ready { box-shadow: 0 0 0 2px var(--gold), 0 0 22px -2px var(--gold); animation: ready 1s ease-in-out infinite alternate; }
+.rbtn.special.ready b { color: var(--gold); }
+.rbtn.special.live::before { background: var(--gold); }
+.rbtn.special.live b, .rbtn.special.live span { color: #1a1405; }
+@keyframes ready { from { box-shadow: 0 0 0 2px var(--gold), 0 0 10px -4px var(--gold); } to { box-shadow: 0 0 0 2px var(--gold), 0 0 26px 0 var(--gold); } }
+.rbtn.dash { display: none; width: 3.5rem; height: 3.5rem; --rc: var(--hot); font-weight: 600; font-size: .8rem; }
+@media (pointer: coarse) { .rbtn.dash { display: grid; } kbd { display: none !important; } }
+.sets { display: grid; gap: 4px; justify-items: end; }
+.setrow { --c: #888; display: flex; align-items: center; gap: 8px; background: rgba(16,14,24,.85); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: .74rem; white-space: nowrap; }
+.setrow.full { border-color: var(--c); }
+.setrow b { font-weight: 600; color: var(--c); }
+.setrow .sp { display: flex; gap: 2px; }
+.setrow .sp i { width: 7px; height: 10px; border-radius: 2px; background: var(--line); }
+.setrow .sp i.on { background: var(--c); }
+.setrow .sp i.tier { box-shadow: 0 -2px 0 0 #fff8; }
+.setrow span { color: var(--mute); font-family: var(--f-mono); font-size: .68rem; }
+.band { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; max-width: min(30rem, calc(100vw - 7.5rem)); }
+.tile { --c: #888; position: relative; width: 3.5rem; height: 3.1rem; border-radius: 9px; background: rgba(16,14,24,.9); border: 1.5px solid var(--c); display: grid; place-items: center; align-content: center; gap: 4px; }
+.tile b { font-family: var(--f-display); font-weight: 700; font-size: .72rem; color: var(--c); letter-spacing: .02em; max-width: 100%; overflow: hidden; text-overflow: clip; white-space: nowrap; padding: 0 2px; }
+.tile .lv { display: flex; gap: 3px; }
+.tile .lv i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.tile .lv i.on { background: var(--c); }
+.tile.open { border: 1.5px dashed #4a4366; }
+.tile.open b { color: #6f6890; font-weight: 500; }
+.tile.queued, .tile.leaving { animation: flick .5s steps(2) infinite; }
+.tile.down { border-color: var(--hot); }
+.tile.down > b, .tile.down > .lv { opacity: .3; }
+.tile .cd { position: absolute; inset: 0; background: rgba(16,14,24,.88); display: grid; place-items: center; align-content: center; border-radius: 8px; font-family: var(--f-mono); font-size: .9rem; color: var(--hot); line-height: 1; }
+.tile .cd small { display: block; font-size: .6rem; color: var(--mute); }
+.tile.lens { width: 2.6rem; height: 2.6rem; border-radius: 50%; gap: 0; }
+.tile.lens.open { border-style: dashed; }
+.band .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 2px; }
+.hp { min-width: 16rem; }
+.bar.hull { position: relative; height: 14px; border-radius: 7px; }
+.bar.hull u { position: absolute; left: 0; top: 0; bottom: 0; background: #fff; opacity: .5; text-decoration: none; }
+.bar.hull i { position: relative; transition: none; }
+.gong { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.gong i { display: block; height: 100%; width: 0; background: var(--gold); }
+.gong.on i { box-shadow: 0 0 8px var(--gold); }
+.hp.low { border-color: var(--hot); animation: lowhp .6s ease-in-out infinite alternate; }
+.hp.low #hpTxt { color: var(--hot); }
+@keyframes lowhp { from { box-shadow: 0 0 0 0 rgba(255,92,138,0); } to { box-shadow: 0 0 18px 0 rgba(255,92,138,.55); } }
+.calm .hp.low, .calm .rbtn.special.ready, .calm .tile.queued, .calm .tile.leaving { animation: none; }
+.vignette { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .4s; box-shadow: inset 0 0 120px 30px rgba(255,40,70,.55); }
+.notices { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); display: grid; gap: 8px; justify-items: center; pointer-events: none; width: min(560px, calc(100% - 32px)); }
+.note { font-family: var(--f-display); font-weight: 700; font-size: clamp(1.05rem, 3.4vw, 1.6rem); letter-spacing: .05em; text-align: center; text-shadow: 0 0 18px rgba(255,92,138,.6), 0 1px 3px #000; animation: notein .25s ease-out; transition: opacity .4s; }
+.note small { display: block; font-family: var(--f-body); font-weight: 500; font-size: .85rem; color: var(--mute); text-shadow: 0 1px 3px #000; letter-spacing: 0; }
+.note.out { opacity: 0; }
+.note + .note { font-size: clamp(.9rem, 2.6vw, 1.15rem); opacity: .85; }
+@keyframes notein { from { transform: translateY(-8px); opacity: 0; } }
+.bosshud { top: calc(5rem + env(safe-area-inset-top, 0px)); }
+@media (min-width: 1100px) { .bosshud { top: calc(14px + env(safe-area-inset-top, 0px)); width: min(520px, calc(100% - 700px)); } }
+@media (max-width: 640px) { .bosshud { top: calc(4.6rem + env(safe-area-inset-top, 0px)); } }
+@media (pointer: coarse) and (orientation: landscape) { .hud.bottom .left { margin-bottom: 2.5rem; } }
+/* Reward and pick cards: colour band on top, lift on hover, changed numbers highlighted, skip card quieter */
+.card { position: relative; overflow: hidden; transition: transform .12s ease-out, box-shadow .12s, border-color .12s; padding-top: 18px; }
+.card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 5px; background: var(--c); }
+.card:hover, .card:focus-visible { transform: translateY(-4px); }
+.card .fx em, .card .music em { font-style: normal; font-weight: 600; color: var(--gold); }
+.card .lvl { display: flex; gap: 4px; align-items: center; font-family: var(--f-mono); font-size: .68rem; color: var(--mute); }
+.card .lvl i { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--c); }
+.card .lvl i.on { background: var(--c); }
+.card .lvl i.new { background: #fff; border-color: #fff; box-shadow: 0 0 6px var(--c); }
+.card.skip { background: transparent; border-style: dashed; }
+.card.skip::before { opacity: .35; }
+.card.skip b { font-size: 1rem; }
+.card .reward { font-size: .82rem; color: var(--ink); }
+.card .reward i { font-style: normal; color: var(--c); margin-right: 6px; }
+.card.pilot { min-height: 15rem; padding: 22px 16px 16px; }
+.card.pilot::before { height: 8px; }
+.card.pilot b { font-size: 1.6rem; color: var(--c); }
+.card.pilot .last { position: absolute; top: 14px; right: 12px; font-family: var(--f-mono); font-size: .66rem; color: var(--gold); }
+@media (prefers-reduced-motion: reduce) { .card, .note { transition: none; animation: none; } .card:hover, .card:focus-visible { transform: none; } }
+/* Pause build sheet and options */
+.sheet { width: min(1040px, 100%); }
+.sheet .item { align-items: flex-start; }
+.sheet .item b small { font-family: var(--f-mono); font-weight: 500; font-size: .7rem; color: var(--c, var(--mute)); margin-left: 6px; }
+.sheet .item { border-left: 3px solid var(--c, var(--line)); }
+.opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; }
+.opts label { display: flex; gap: 8px; align-items: center; font-size: .86rem; color: var(--mute); }
+.opts input[type=checkbox] { accent-color: var(--gold); width: 16px; height: 16px; }
+.opts input[type=range] { accent-color: var(--gold); flex: 1; min-width: 90px; }
+.opts.vols { margin-bottom: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.opts .vol { color: var(--ink); font-weight: 600; }
+.opts output { font-family: var(--f-mono); font-size: .76rem; color: var(--ink); min-width: 3ch; }
+@media (max-width: 560px) {
+  .tile { width: 3rem; height: 2.8rem; }
+  .tile.lens { width: 2.3rem; height: 2.3rem; }
+  .hp { min-width: 0; width: min(16rem, 62vw); }
+  .rbtn.special { width: 4rem; height: 4rem; }
+  .setrow span, .setrow b { display: none; }
+  .tl .room { font-size: .78rem; }
+  .hud.bottom { flex-wrap: nowrap; }
+  .hp { width: 50vw; }
+  .band { max-width: 54vw; gap: 5px; }
+  .tile { width: 2.75rem; height: 2.6rem; }
+  .tile b { font-size: .66rem; letter-spacing: 0; }
+  .tile.lens { width: 2.2rem; height: 2.2rem; }
+  .rbtn.special { width: 3.9rem; height: 3.9rem; }
+  .rbtn.dash { width: 3.1rem; height: 3.1rem; }
+  .actions { gap: 6px; }
+  #layerTxt { display: none; }
+  .card.pilot { min-height: 0; }
+}
 </style>
 
 <div id="app">
   <canvas id="cv" aria-label="Arena"></canvas>
 
   <div class="hud top" id="hudTop" hidden>
-    <div class="tl"></div>
-    <div class="box mid">
-      <span class="room" id="roomTxt">Room 1 · Act I</span>
+    <div class="box tl">
+      <div class="tlrow"><span class="room" id="roomTxt">Room 1 · Act I</span><span class="pill" id="modePill">Autopilot · 60%</span></div>
       <div class="map" id="map"></div>
     </div>
-    <div class="right">
-      <span class="pill" id="modePill">Autopilot · 60%</span>
-      <button class="btn special" id="specialBtn" type="button" disabled>Shred special <kbd>X</kbd></button>
+    <div></div>
+    <div class="tr">
+      <div class="box pips" id="pips"><i></i><i></i><i></i><i></i><span id="chordTxt">Am</span></div>
+      <button class="rbtn pausebtn" id="pauseBtn" type="button" aria-label="Pause (Esc)" title="Pause (Esc)"><svg viewBox="0 0 14 14" aria-hidden="true"><rect x="2" y="1" width="3.5" height="12" rx="1" fill="currentColor"/><rect x="8.5" y="1" width="3.5" height="12" rx="1" fill="currentColor"/></svg></button>
     </div>
   </div>
 
@@ -188,22 +319,27 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
     <div class="bbar"><i id="bossBar"></i><s id="bossMark"></s></div>
   </div>
 
+  <div class="vignette" id="vignette"></div>
   <div class="hud bottom" id="hudBot" hidden>
     <div class="left">
-      <div class="loadout" id="loadout"></div>
-      <div class="box hp">
+      <div class="band" id="band" aria-label="Your band: layers and lenses"></div>
+      <div class="box hp" id="hpBox">
         <div class="row"><span>Hull</span><b id="hpTxt">100 / 100</b></div>
-        <div class="bar"><i id="hpBar"></i></div>
-        <div class="row"><span id="shieldTxt">Shield none</span><span id="layerTxt">Layers 0 / 3</span></div>
+        <div class="bar hull"><u id="hpGhost"></u><i id="hpBar"></i></div>
+        <div class="gong" id="gongWrap" hidden><i id="gongBar"></i></div>
+        <div class="row"><span id="shieldTxt">No gong</span><span id="layerTxt">Band 0 / 3</span></div>
+      </div>
     </div>
-    </div>
-    <div class="right">
-      <div class="touchpad"><button class="btn small" id="dashBtn" type="button">Dash</button><button class="btn small" id="pauseBtn" type="button">Pause</button></div>
-      <div class="box pips" id="pips"><i></i><i></i><i></i><i></i><span id="chordTxt" style="font-family:var(--f-mono);font-size:.74rem;color:var(--gold);margin-left:4px">Am</span></div>
+    <div class="br">
+      <div class="sets" id="sets"></div>
+      <div class="actions">
+        <button class="rbtn dash" id="dashBtn" type="button" aria-label="Dash"><span>Dash</span></button>
+        <button class="rbtn special" id="specialBtn" type="button" disabled><b id="spMain">0/7</b><span id="spSub">Special</span><kbd>X</kbd></button>
+      </div>
     </div>
   </div>
 
-  <div class="banner" id="banner"></div>
+  <div class="notices" id="banner" aria-live="polite"></div>
   <div class="screen" id="screen"></div>
 </div>
 
@@ -680,7 +816,10 @@ function build() {
   const limiter = new Tone.Limiter(-1);
   const meter = new Tone.Meter({ smoothing: 0.6 });
   const slowLP = new Tone.Filter({ type: "lowpass", frequency: 20000, rolloff: -24 });
-  master.chain(slowLP, comp, limiter, Tone.Destination);
+  // Volume settings: music and effects each get their own gain ahead of the shared slow-mo filter, compressor and limiter
+  const musicG = new Tone.Gain(1), sfxG = new Tone.Gain(1);
+  master.chain(musicG, slowLP, comp, limiter, Tone.Destination);
+  sfxG.connect(slowLP);
   limiter.connect(meter);
   const reverb = new Tone.Reverb({ decay: 2.8, preDelay: 0.02, wet: 1 }).connect(master);
   const duckBus = new Tone.Gain(1).connect(master);   // other layers duck under the full-set bonus
@@ -696,7 +835,7 @@ function build() {
     s.gate = s.wanted;
   }
   const F = id => byId(id).fader;
-  const n = { master, meter, reverb, pumpBus, duckBus, beatBus, slowLP };
+  const n = { master, meter, reverb, pumpBus, duckBus, beatBus, slowLP, musicG, sfxG };
   // Shred special: riser for the slow-motion windup, two solo guitars for the solo or the duel
   const riserBP = new Tone.Filter({ type: "bandpass", frequency: 400, Q: 2 }).connect(comp);
   n.riserBP = riserBP;
@@ -796,7 +935,7 @@ function build() {
   n.crash.volume.value = -9;
 
   // Hit sound effect (not a layer)
-  const hitBP = new Tone.Filter({ type: "bandpass", frequency: 1800, Q: 0.8 }).connect(master);
+  const hitBP = new Tone.Filter({ type: "bandpass", frequency: 1800, Q: 0.8 }).connect(sfxG);
   n.hitfx = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.001, decay: 0.25, sustain: 0 } }).connect(hitBP);
   n.hitfx.volume.value = -6;
 
@@ -1449,7 +1588,7 @@ let ctxReady = false;
 async function startAudio() {
   if (playing) return;
   await Tone.start();
-  if (!nodes) { nodes = build(); try { await nodes.reverb.ready; } catch (e) {} }
+  if (!nodes) { nodes = build(); applyVol(); try { await nodes.reverb.ready; } catch (e) {} }
   for (const s of STEMS) { const o = s.wanted && !s.dropped; s.fader.gain.cancelScheduledValues(0); s.fader.gain.value = o ? 1 : 0; s.gate = s.wanted; s.state = s.dropped ? "dropped" : (s.wanted ? "on" : "off"); }
   Tone.Transport.bpm.value = baseBpm;
   Tone.Transport.position = 0;
@@ -1550,10 +1689,24 @@ const BAND = { 3: "Trio", 4: "Quartet", 5: "Quintet", 6: "Sextet" };
 
 // ---------- Account save (this browser only) ----------
 const SAVE_KEY = "gw-gig-run-v1";
-function defaultSave() { return { xp: 0, level: 1, royalties: 0, owned: {}, bans: [], runs: 0, wins: 0, bestRoom: 0, dev: false, idle: false }; }
+function defaultSave() { return { xp: 0, level: 1, royalties: 0, owned: {}, bans: [], runs: 0, wins: 0, bestRoom: 0, dev: false, idle: false, opts: { dmg: true, shake: 1, calm: false, ui: 1, vMaster: 0.5, vMusic: 1, vSfx: 1 } }; }
 let save = defaultSave();
 try { const j = JSON.parse(localStorage.getItem(SAVE_KEY) || "null"); if (j) save = Object.assign(defaultSave(), j); } catch (e) {}
 if (save.owned.metal) { save.owned["set-pm"] = 1; delete save.owned.metal; }
+const OPT = () => (save.opts = Object.assign({ dmg: true, shake: 1, calm: false, ui: 1, vMaster: 0.5, vMusic: 1, vSfx: 1 }, save.opts || {}));
+// Volume: sliders are 0-100%, squared so the low end of the slider is usable; 0 mutes
+// Gee's rule: the game starts quieter than usual (Master 50%, about -12 dB). Older saves made before this get it once.
+if (save.volDefault !== 2) { const o = OPT(); o.vMaster = Math.min(o.vMaster, 0.5); save.volDefault = 2; persist(); }
+function applyVol() { if (!nodes) return; const o = OPT(); try { Tone.Destination.mute = o.vMaster <= 0; if (o.vMaster > 0) Tone.Destination.volume.value = Tone.gainToDb(o.vMaster * o.vMaster); } catch (e) {}
+  if (nodes) { nodes.musicG.gain.rampTo(o.vMusic * o.vMusic, 0.05); nodes.sfxG.gain.rampTo(o.vSfx * o.vSfx, 0.05); } }
+function applyOpts() { const o = OPT(); applyVol(); document.documentElement.style.setProperty("--ui", o.ui); document.getElementById("app").classList.toggle("calm", !!o.calm); }
+function optionsHTML() { const o = OPT(); const vol = (k, name) => `<label class="vol">${name} <input type="range" min="0" max="1" step="0.05" value="${o[k]}" data-opt="${k}" aria-label="${name} volume"><output>${Math.round(o[k] * 100)}%</output></label>`;
+  return `<div class="opts vols">${vol("vMaster", "Master")}${vol("vMusic", "Music")}${vol("vSfx", "Effects and ambience")}</div><div class="opts">
+  <label><input type="checkbox" data-opt="dmg" ${o.dmg ? "checked" : ""}> Floating damage numbers</label>
+  <label><input type="checkbox" data-opt="calm" ${o.calm ? "checked" : ""}> Reduce flashing and pulsing</label>
+  <label>Screen shake <input type="range" min="0" max="1" step="0.25" value="${o.shake}" data-opt="shake"><output>${Math.round(o.shake * 100)}%</output></label>
+  <label>UI size <input type="range" min="0.8" max="1.3" step="0.05" value="${o.ui}" data-opt="ui"><output>${Math.round(o.ui * 100)}%</output></label></div>`; }
+function bindOptions(root) { root.querySelectorAll("[data-opt]").forEach(el => el.addEventListener("input", () => { const o = OPT(), k = el.dataset.opt; o[k] = el.type === "checkbox" ? el.checked : +el.value; const out = el.parentElement.querySelector("output"); if (out) out.textContent = Math.round(o[k] * 100) + "%"; persist(); applyOpts(); if (k === "ui") resize(); })); }
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
 const xpToNext = l => 120 + 80 * (l - 1);
 const owned = id => save.dev || (save.owned[id] || 0) > 0;
@@ -1577,7 +1730,7 @@ function resize() {
   view.w = r.width; view.h = r.height;
   cv.width = Math.round(r.width * view.dpr); cv.height = Math.round(r.height * view.dpr);
   if (!run || run.mode !== "fight") { const portrait = r.height > r.width * 1.15; AW = portrait ? 640 : 1000; AH = portrait ? 980 : 640; }
-  const padT = 70, padB = 70;
+  const padT = 64, padB = 96;
   view.s = Math.min(r.width / AW, (r.height - padT - padB) / AH);
   if (view.s * AH < r.height * 0.5) view.s = Math.min(r.width / AW, r.height / AH);
   view.ox = (r.width - AW * view.s) / 2; view.oy = Math.max(0, (r.height - AH * view.s) / 2);
@@ -1596,7 +1749,7 @@ let joy = null, paused = false, strafeDir = 1, dashBuffer = 0;
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-function shake(a) { shakeAmt = Math.max(shakeAmt, a); }
+function shake(a) { shakeAmt = Math.max(shakeAmt, a * OPT().shake); }
 function markInput() { lastInput = performance.now(); }
 const piloting = () => active("rock");
 const power = () => (piloting() ? 1 : 0.6) * (specialPhase === "solo" ? 1.25 : 1) * (1 + 0.15 * ((run && run.vol) || 0));
@@ -1864,7 +2017,7 @@ function applyEl(e, dmg, el) {
 let amb = null;
 function ambInit() {
   if (amb || !nodes) return amb;
-  const bus = new Tone.Gain(1).connect(nodes.duckBus);
+  const bus = new Tone.Gain(1).connect(nodes.sfxG);
   // fire: low ember roar + random pops
   const fireG = new Tone.Gain(0).connect(bus);
   const roar = new Tone.Noise("brown"); roar.volume.value = -22; roar.chain(new Tone.Filter({ type: "lowpass", frequency: 420 }), fireG);
@@ -1881,7 +2034,7 @@ function ambInit() {
   const rumbleF = new Tone.Filter({ type: "lowpass", frequency: 260 }).connect(ltG);
   const rumble = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.25, decay: 2.2, sustain: 0, release: 0.5 } }).connect(rumbleF); rumble.volume.value = -4;
   // stun crash bypasses the duck bus so it lands extra loud
-  const crashBus = new Tone.Gain(1.4).connect(nodes.master);
+  const crashBus = new Tone.Gain(1.4).connect(nodes.sfxG);
   const crash = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.002, decay: 0.9, sustain: 0, release: 0.4 } });
   crash.chain(new Tone.Filter({ type: "lowpass", frequency: 5200 }), crashBus); crash.volume.value = 2;
   const boom = new Tone.MembraneSynth({ pitchDecay: 0.25, octaves: 5, envelope: { attack: 0.002, decay: 1.4, sustain: 0, release: 0.4 } }).connect(crashBus); boom.volume.value = 2;
@@ -2128,7 +2281,8 @@ function showPilots() {
   run.mode = "choice";
   const ids = Object.keys(PILOTS);
   showScreen(`<div class="panel"><div><h2>Choose your pilot</h2><p>Each pilot starts with its own weapon and can find its own 7-piece starter set during the run.</p></div>
-    <div class="cards">${ids.map((id, i) => { const p = PILOTS[id]; return `<button class="card" type="button" data-p="${id}" style="--c:${p.color}"><span class="tag">PILOT</span><b>${p.name}</b><span class="music">Starter set: ${SETS[p.set].name}, ${p.music}</span><span class="fx">${p.perk}</span><span class="slot">Starting layer: ${byId(p.start).power}</span><kbd>${i + 1}</kbd></button>`; }).join("")}</div></div>`);
+    <div class="cards">${ids.map((id, i) => { const p = PILOTS[id]; return `<button class="card pilot" type="button" data-p="${id}" style="--c:${p.color}">${save.pilot === id ? `<span class="last">Last pick</span>` : ""}<span class="tag">PILOT</span><b>${p.name}</b><span class="reward"><i>⚔</i>${byId(p.start).power}</span><span class="fx">${hl(p.perk)}</span><span class="music">Starter set: <b style="font-size:inherit;color:var(--c)">${SETS[p.set].name}</b>, ${p.music}</span><kbd>${i + 1}</kbd></button>`; }).join("")}</div></div>`);
+  const lastCard = save.pilot && screenEl.querySelector(`[data-p="${save.pilot}"]`); if (lastCard) lastCard.focus({ preventScroll: true });
   document.querySelectorAll("[data-p]").forEach(b => b.addEventListener("click", () => choosePilot(b.dataset.p)));
   armIdle(() => choosePilot(save.pilot && PILOTS[save.pilot] ? save.pilot : "knight"));
 }
@@ -2248,18 +2402,23 @@ function makeChoices(kind) {
   if (kind !== "start") out.push(P.hp < P.maxHp * 0.6 || (kind !== "green" && Math.random() < 0.4) ? { type: "patch" } : { type: "tip" });
   return out;
 }
+const hl = t => String(t).replace(/([+\-]?\d+(?:\.\d+)?(?:%| dps| s| dB| BPM)?)/g, "<em>$1</em>");
+const lvPips = (have, next, max) => { let h = ""; for (let k = 1; k <= max; k++) h += `<i class="${k <= have ? "on" : k <= next ? "new" : ""}"></i>`; return h; };
 function cardHTML(card, i) {
-  let color = "#ffd166", tag = "", title = "", music = "", eff = "", slot = "";
+  let color = "#ffd166", tag = "", title = "", music = "", eff = "", slot = "", extra = "";
   if (card.type === "new" || card.type === "up") {
     const s = byId(card.id); color = s.color;
     const lv = card.type === "up" ? run.lv.get(card.id) + 1 : 1;
-    tag = card.type === "new" ? "NEW LAYER" : "LEVEL " + lv; title = s.power + (card.type === "up" ? " Lv " + lv : "");
+    tag = card.type === "new" ? "NEW LAYER" : `LEVEL ${lv - 1} → ${lv}`;
+    extra = `<span class="lvl">${lvPips(lv - 1, lv, 3)} Lv ${lv} of 3</span>`; title = s.power + (card.type === "up" ? " Lv " + lv : "");
     music = (card.type === "new" ? s.layer + ": " : "Music: ") + PW[card.id].lv[lv - 1].toLowerCase();
     eff = PW[card.id].fx + (card.type === "up" && card.id !== "pads" ? " +45% damage." : "");
     slot = "Mounts on: " + SLOT_NAME[SLOT_OF[card.id]];
   } else if (card.type === "gear") {
     const pc = PIECE[card.id], S = SETS[pc.set], have = membersOf(pc.set); color = S.color;
-    tag = S.name.toUpperCase() + " · " + (have.size + pc.covers.filter(m => !have.has(m)).length) + "/7"; title = pc.item;
+    const nk = have.size + pc.covers.filter(m => !have.has(m)).length;
+    tag = S.name.toUpperCase() + " · " + nk + "/7"; title = pc.item;
+    extra = `<span class="lvl">${lvPips(have.size, nk, 7)} ${have.size} → ${nk} of 7</span>`;
     music = "Adds: " + pc.member + " (" + pc.adds + ")"; eff = GEAR_FX[card.id] + (SET_TIERS[pc.set] ? ` Set bonus: ${SET_TIERS[pc.set].tiers.map(([n, v]) => n + "/7 +" + Math.round(v * 100) + "%").join(", ")} ${SET_TIERS[pc.set].what}.` : ""); slot = pc.hands ? (pc.hands === 2 ? "Two-handed weapon · counts as 2" : "One-handed weapon") : BODY[pc.body].label + " armor";
   } else if (card.type === "hp") { const n = (run.sub || 0) + 1; color = "#5ee0a0"; tag = `MIX · ${n}/3`; title = "Subwoofer"; music = "Mix: the kick drum gets deeper and louder (+2 dB)"; eff = "+20 max hull and repair 20. Base beat shots deal +25% damage."; slot = "Chassis"; }
   else if (card.type === "amp") { const n = (run.vol || 0) + 1; color = "#ffd166"; tag = `MIX · ${n}/3`; title = "Amp: volume up"; music = "Mix: the whole song gets louder (+1.5 dB)"; eff = "+15% damage on every attack."; slot = "Amp"; }
@@ -2269,7 +2428,8 @@ function cardHTML(card, i) {
   else if (card.type === "patch") { color = "#5ee0a0"; tag = "SKIP"; title = "Quick patch"; music = "Keep the song as it is"; eff = `Repair ${patchAmt()} hull.`; slot = "Changes nothing on the Rig"; }
   const rm = plan(card);
   const warn = rm.length ? `<span class="warn">Replaces ${rm.map(nameOf).join(" and ")} on the next bar</span>` : "";
-  return `<button class="card" type="button" data-i="${i}" style="--c:${color}"><span class="tag">${tag}</span><b>${title}</b><span class="music">${music}</span><span class="fx">${eff}</span><span class="slot">${slot}</span>${warn}<kbd>${i + 1}</kbd></button>`;
+  const skip = card.type === "tip" || card.type === "patch";
+  return `<button class="card${skip ? " skip" : ""}" type="button" data-i="${i}" style="--c:${color}"><span class="tag">${tag}</span><b>${title}</b>${extra}<span class="music">${music}</span><span class="fx">${hl(eff)}</span><span class="slot">${slot}</span>${warn}<kbd>${i + 1}</kbd></button>`;
 }
 // Which mounts on the Rig are filled, so a reward never surprises you
 function slotStrip() {
@@ -2380,17 +2540,17 @@ function doorOptions() {
   return [...opts];
 }
 const DOOR = {
-  fight: ["Fight", "A standard room. Normal reward."],
-  elite: ["Elite", "Tougher room with an elite enemy. Set pieces likely."],
-  green: ["Green Room", "No fight. Repair 35% hull and pick an upgrade."],
-  mini: ["Mini-boss", "Overdrive guards the end of Act I."],
-  boss: ["The Mute", "The final boss. It wants your song gone."],
+  fight: ["Fight", "A standard room.", "♪", "Reward: a layer, level-up or mix pick"],
+  elite: ["Elite", "Tougher room with a silencer elite.", "◆", "Reward: a set piece, guaranteed if one can drop"],
+  green: ["Green Room", "No fight.", "✚", "Repair 35% hull, then pick an upgrade"],
+  mini: ["Mini-boss", "Overdrive guards the end of Act I.", "☠", "Reward: a pick, then Act II"],
+  boss: ["The Mute", "The final boss. It wants your song gone.", "☠", "Win the run"],
 };
 function showDoors() {
   run.mode = "choice";
   const opts = doorOptions();
   showScreen(`<div class="panel"><div><h2>Choose the next door</h2><p>Room ${run.room + 1} of 12. Hull ${Math.round(P.hp)}/${P.maxHp}.</p></div>
-    <div class="cards">${opts.map((o, i) => `<button class="card" type="button" data-o="${o}" style="--c:${o === "elite" ? "#ff9b54" : o === "green" ? "#5ee0a0" : o === "boss" || o === "mini" ? "#ff5c8a" : "#8fb4ff"}"><span class="tag">${o === "mini" || o === "boss" ? "BOSS" : "ROOM " + (run.room + 1)}</span><b>${DOOR[o][0]}</b><span class="fx">${DOOR[o][1]}</span><kbd>${i + 1}</kbd></button>`).join("")}</div>
+    <div class="cards">${opts.map((o, i) => `<button class="card" type="button" data-o="${o}" style="--c:${o === "elite" ? "#ff9b54" : o === "green" ? "#5ee0a0" : o === "boss" || o === "mini" ? "#ff5c8a" : "#8fb4ff"}"><span class="tag">${o === "mini" || o === "boss" ? "BOSS" : "ROOM " + (run.room + 1)}</span><b>${DOOR[o][0]}</b><span class="reward"><i>${DOOR[o][2]}</i>${DOOR[o][3]}</span><span class="fx">${DOOR[o][1]}</span><kbd>${i + 1}</kbd></button>`).join("")}</div>
     <div class="row-actions"><span id="idleNote" style="font-size:.8rem;color:var(--mute)"></span></div></div>`);
   document.querySelectorAll(".card").forEach(b => b.addEventListener("click", () => startRoom(b.dataset.o)));
   choiceState = null;
@@ -2436,9 +2596,11 @@ function showHub() {
         <span>Getting hit triggers <b>Dropout</b>: your newest layer and its weapon cut out for 2 bars.</span>
         <span>A full 7-piece set: <kbd>X</kbd> for its special. 10 s invincible, 30 s cooldown (45 s in boss rooms).</span>
         <span><kbd>Esc</kbd> pauses. Rewards: <kbd>1</kbd> to <kbd>4</kbd> (the 4th card skips).</span>
-        <span>Progress is saved in this browser only.</span></div></div>
+        <span>Progress is saved in this browser only.</span></div>
+        <h3 style="margin-top:10px">Volume and options</h3>${optionsHTML()}</div>
     </div></div>`);
   document.getElementById("startBtn").addEventListener("click", async () => { await startAudio(); newRun(); });
+  bindOptions(screenEl);
   document.getElementById("idleChk").addEventListener("change", e => { save.idle = e.target.checked; persist(); });
   document.getElementById("devChk").addEventListener("change", e => { save.dev = e.target.checked; persist(); showHub(); });
   screenEl.querySelectorAll("[data-buy]").forEach(b => b.addEventListener("click", () => { const s = SHOP.find(x => x.id === b.dataset.buy); if (save.royalties >= s.cost) { save.royalties -= s.cost; save.owned[s.id] = (save.owned[s.id] || 0) + 1; persist(); showHub(); } }));
@@ -2455,16 +2617,38 @@ function showSummary(r) {
   document.getElementById("againBtn").addEventListener("click", () => newRun());
   document.getElementById("hubBtn").addEventListener("click", showHub);
 }
+// Pause = build sheet: everything on the Rig with its full text (Hades pause screen; fixes Risk of Rain 2's "explained only in the logbook")
+function buildSheet() {
+  const secs = Math.round((performance.now() - run.started) / 1000);
+  const layersH = [...run.lv.keys()].sort((a, b) => byId(a).order - byId(b).order).map(id => { const st = byId(id), lv = run.lv.get(id), w = PW[id]; return `<div class="item" style="--c:${st.color}"><div><b>${st.power}<small>Lv ${lv}/3</small></b><span>${w ? hl(w.fx) : ""}</span><span>${st.layer}${w && w.lv ? ": " + w.lv[lv - 1].toLowerCase() : ""}</span></div></div>`; }).join("") || `<p>No layers yet.</p>`;
+  let gearH = "";
+  for (const sid in SETS) { const k = membersOf(sid).size; if (!k) continue; const S = SETS[sid], T = SET_TIERS[sid];
+    const tiers = T ? T.tiers.map(([n, v]) => `<span style="color:${k >= n ? "var(--ink)" : "var(--mute)"}">${k >= n ? "■" : "□"} ${n}/7: +${Math.round(v * 100)}% ${T.what}</span>`).join("") : "";
+    gearH += `<div class="item" style="--c:${S.color}"><div><b>${S.name}<small>${k}/7</small></b>${tiers}<span>${k >= 7 ? "■" : "□"} 7/7: ${specialLabel(sid)} special (X)</span></div></div>`;
+    for (const g of [...equipped].filter(g => PIECE[g].set === sid)) gearH += `<div class="item" style="--c:${S.color}"><div><b>${PIECE[g].item}<small>${PIECE[g].member}</small></b><span>${hl(GEAR_FX[g] || "")}</span></div></div>`; }
+  const lensH = run.lens.map(l => { const E2 = EL[l.el]; return `<div class="item" style="--c:${E2.color}"><div><b>${E2.name} Lens<small>Lv ${l.lv}/2</small></b><span>${hl(E2.fx)}</span>${l.lv > 1 ? `<span>${hl(LENS_UP[l.el])}</span>` : ""}</div></div>`; }).join("");
+  const mixH = `<div class="item"><div><b>Mix</b><span>Amp ${run.vol || 0}/3 · Subwoofer ${run.sub || 0}/3 · Metronome ${run.tempo || 0}/3 (${actBpm()} BPM)</span></div></div>`;
+  return `<div class="panel sheet"><div class="row-actions" style="justify-content:space-between"><h2>Paused</h2><div class="stat"><span>${run.pilot ? PILOTS[run.pilot].name : ""}</span><span>Room <b>${run.room}/12</b></span><span>Hull <b>${Math.ceil(P.hp)}/${P.maxHp}</b></span><span>Silenced <b>${run.kills}</b></span><span>Time <b>${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}</b></span></div></div>
+    ${slotStrip()}
+    <div class="cols"><div class="list"><h3>Band ${run.lv.size}/${layerCap()}</h3>${layersH}</div><div class="list"><h3>Gear and sets</h3>${gearH || "<p>No set pieces yet.</p>"}</div><div class="list"><h3>Lenses and mix</h3>${lensH}${mixH}</div></div>
+    <div class="list"><h3>Volume and options</h3>${optionsHTML()}</div>
+    <div class="row-actions"><button class="btn primary" id="resumeBtn" type="button">Resume <kbd>Esc</kbd></button><button class="btn" id="quitBtn" type="button">End run</button></div></div>`;
+}
 function togglePause() {
   if (!run || run.mode !== "fight") return;
   paused = !paused;
-  if (paused) { Tone.Transport.pause(); if (amb) amb.bus.gain.rampTo(0, 0.2); showScreen(`<div class="panel" style="width:min(640px,100%)"><h2>Paused</h2>${slotStrip()}<div class="row-actions"><button class="btn primary" id="resumeBtn" type="button">Resume <kbd>Esc</kbd></button><button class="btn" id="quitBtn" type="button">End run</button></div></div>`);
+  if (paused) { Tone.Transport.pause(); if (amb) amb.bus.gain.rampTo(0, 0.2); showScreen(buildSheet()); bindOptions(screenEl);
     document.getElementById("resumeBtn").addEventListener("click", togglePause);
     document.getElementById("quitBtn").addEventListener("click", () => { paused = false; Tone.Transport.start(); if (amb) amb.bus.gain.rampTo(1, 0.4); hideScreen(); run.mode = "fight"; endRun(false); }); }
   else { Tone.Transport.start(); if (amb) amb.bus.gain.rampTo(1, 0.4); hideScreen(); }
 }
 let bannerT;
-function banner(t, sub) { const b = document.getElementById("banner"); b.innerHTML = t + (sub ? `<small>${sub}</small>` : ""); b.classList.add("show"); clearTimeout(bannerT); bannerT = setTimeout(() => b.classList.remove("show"), 2200); }
+function banner(t, sub) {
+  const box = document.getElementById("banner"), n = document.createElement("div");
+  n.className = "note"; n.innerHTML = t + (sub ? `<small>${sub}</small>` : "");
+  box.prepend(n); while (box.children.length > 3) box.lastChild.remove();
+  setTimeout(() => n.classList.add("out"), 2200); setTimeout(() => n.remove(), 2650);
+}
 
 // =====================================================================
 // Simulation (fixed 120 Hz steps so fast bullets and dashes never skip a hit)
@@ -2745,7 +2929,7 @@ function draw(dt) {
   // enemy bullets: the bright core is the part that hurts
   for (const b of bullets) { ctx.fillStyle = hexA(b.color, 0.22); ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 3, 0, 7); ctx.fill(); ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.7 + 1, 0, 7); ctx.fill(); ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.4, 0, 7); ctx.fill(); }
   ctx.font = "600 15px Figtree, system-ui, sans-serif"; ctx.textAlign = "center";
-  for (const t of texts) { ctx.fillStyle = hexA(t.color, 1 - t.t / 0.8); ctx.fillText(t.s, t.x, t.y - t.t * 40); }
+  if (OPT().dmg) for (const t of texts) { ctx.fillStyle = hexA(t.color, 1 - t.t / 0.8); ctx.fillText(t.s, t.x, t.y - t.t * 40); }
 
   if (specialPhase === "windup") { ctx.fillStyle = "rgba(20,16,40,.35)"; ctx.fillRect(0, 0, AW, AH); }
   if (specialPhase === "solo") { ctx.fillStyle = hexA(SETS[specialSet] ? SETS[specialSet].color : "#ffd166", 0.05 + 0.08 * beatPulse); ctx.fillRect(0, 0, AW, AH); }
@@ -2754,7 +2938,7 @@ function draw(dt) {
     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, AW, bh); ctx.fillRect(0, AH - bh, AW, bh);
     if (finale.phase === "duel") { const dk = (performance.now() - finale.t) / 1150; ctx.fillStyle = hexA("#ffffff", Math.max(0, 0.6 - dk)); ctx.fillRect(0, 0, AW, AH); const e = finale.e; ctx.save(); ctx.beginPath(); ctx.rect(0, bh, AW, AH - 2 * bh); ctx.clip(); ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3 + 6 * (1 - dk); ctx.beginPath(); ctx.moveTo(e.x - 400, e.y + 160); ctx.lineTo(e.x - 400 + 800 * Math.min(1, dk * 4), e.y + 160 - 320 * Math.min(1, dk * 4)); ctx.stroke(); ctx.restore(); }
   }
-  if (hitFlash > 0.02) { ctx.fillStyle = hexA("#ff2846", 0.3 * hitFlash); ctx.fillRect(0, 0, AW, AH); }
+  if (hitFlash > 0.02) { ctx.fillStyle = hexA("#ff2846", (OPT().calm ? 0.1 : 0.3) * hitFlash); ctx.fillRect(0, 0, AW, AH); }
 
   // touch joystick
   if (joy && joy.active) {
@@ -2832,14 +3016,28 @@ const $ = id => document.getElementById(id);
 let hudCache = {};
 function setText(id, v) { if (hudCache[id] !== v) { hudCache[id] = v; $(id).textContent = v; } }
 function setHTML(id, v) { if (hudCache[id] !== v) { hudCache[id] = v; $(id).innerHTML = v; } }
+let ghostHp = 0, ghostHold = 0, lastHp = 0;
+const curBarNow = () => Math.floor(Tone.Transport.ticks / (Tone.Transport.PPQ * 4));
+const tileName = p => { const w = p.split(" ").pop(); return w.length > 7 ? w.slice(0, 6) : w; };
+const LENS_SHORT = { fire: "Fire", cold: "Cold", lightning: "Bolt" };
 function hud() {
   if (!run) return;
+  const now = performance.now(), frac = P.hp / P.maxHp;
+  // Hull: number in the bar, a white "lost" chunk that drains after 0.5 s, pulse + red vignette under 30%
+  if (P.hp < lastHp) ghostHold = now + 500; if (P.hp > ghostHp) ghostHp = P.hp; lastHp = P.hp;
+  if (now > ghostHold) ghostHp = Math.max(P.hp, ghostHp - P.maxHp * 0.012);
   setText("hpTxt", `${Math.ceil(P.hp)} / ${P.maxHp}`);
-  $("hpBar").style.width = (P.hp / P.maxHp * 100).toFixed(1) + "%";
-  const now = performance.now();
-  setText("shieldTxt", run.lv.has("pads") ? (now < P.gongUntil ? "Gong: invulnerable" : `Gong every ${LV("pads") === 1 ? "2 bars" : "bar"}`) : "No gong");
-  setText("layerTxt", `Layers ${run.lv.size} / ${layerCap()}`);
-  setText("roomTxt", (run.pilot ? PILOTS[run.pilot].name + " · " : "") + (run.room ? `Room ${run.room} · Act ${run.act === 1 ? "I" : "II"}` : "Opening pick"));
+  $("hpBar").style.width = (frac * 100).toFixed(1) + "%";
+  $("hpGhost").style.width = (ghostHp / P.maxHp * 100).toFixed(1) + "%";
+  const low = frac < 0.3 && P.hp > 0;
+  $("hpBox").classList.toggle("low", low);
+  $("vignette").style.opacity = low ? (OPT().calm ? 0.35 : 0.55 + 0.35 * Math.sin(now / 160)) : 0;
+  const pads = run.lv.has("pads"), gongOn = now < P.gongUntil;
+  $("gongWrap").hidden = !pads; $("gongWrap").classList.toggle("on", gongOn);
+  if (pads) { const cyc = LV("pads") === 1 ? 2 : 1, b = Tone.Transport.ticks / (Tone.Transport.PPQ * 4); $("gongBar").style.width = gongOn ? "100%" : ((b % cyc) / cyc * 100).toFixed(1) + "%"; }
+  setText("shieldTxt", pads ? (gongOn ? "Gong: invulnerable" : `Gong every ${LV("pads") === 1 ? "2 bars" : "bar"}`) : "No gong");
+  setText("layerTxt", `Band ${run.lv.size} / ${layerCap()}`);
+  setText("roomTxt", (run.pilot ? PILOTS[run.pilot].name + " · " : "") + (run.room ? `Room ${run.room} of 12 · Act ${run.act === 1 ? "I" : "II"}` : "Opening pick"));
   const lab = { fight: "F", elite: "E", green: "G", mini: "M", boss: "B" };
   let m = ""; for (let i = 1; i <= 12; i++) { const t = run.path[i - 1] || (i === 6 ? "mini" : i === 12 ? "boss" : ""); m += `<i class="${i < run.room ? "done" : i === run.room ? "now" : ""} ${i === 6 || i === 12 ? "boss" : ""}" title="Room ${i}">${lab[t] || ""}</i>`; }
   setHTML("map", m);
@@ -2848,11 +3046,11 @@ function hud() {
   $("bossHud").hidden = !boss;
   if (boss) {
     const st = boss.stage || 1, mute = boss.type === "mute", fin = mute && st === 3;
-    const cap = mute && st === 2 ? boss.maxHp * 0.6 : boss.maxHp, frac = fin ? 1 : Math.max(0, boss.hp / cap);
+    const cap = mute && st === 2 ? boss.maxHp * 0.6 : boss.maxHp, bf = fin ? 1 : Math.max(0, boss.hp / cap);
     setText("bossName", mute ? (st >= 2 ? "The Open Mouth" : "The Mute") : ET[boss.type].name);
     setText("bossPhase", mute ? (fin ? "Final joust: dash through him" : `Phase ${st} of 2`) : "Mini-boss");
     setText("bossHpTxt", fin ? "" : `${Math.ceil(boss.hp)} / ${Math.round(cap)}`);
-    $("bossBar").style.width = (frac * 100).toFixed(1) + "%";
+    $("bossBar").style.width = (bf * 100).toFixed(1) + "%";
     $("bossBar").style.setProperty("--bc", mute && st >= 2 ? "linear-gradient(90deg, #ff4d6d, #ff9b54)" : "linear-gradient(90deg, #b18cff, #ff5c8a)");
     const mk = $("bossMark"); mk.hidden = !(mute && st === 1 || boss.type === "overdrive"); mk.style.left = "50%";
     $("bossHud").classList.toggle("final", fin);
@@ -2861,17 +3059,40 @@ function hud() {
   const mp = inv > 0 ? `Invincible ${(inv / 1000).toFixed(1)} s` : rock.state === "on" ? (fullSet ? SETS[fullSet].name + " · set bonus" : "Pilot · 100%") : rock.state === "queued" ? "Pilot drops on the bar" : "Autopilot · 60%";
   setText("modePill", mp);
   $("modePill").className = "pill" + (inv > 0 ? " inv" : rock.state === "on" ? " pilot" : rock.state === "queued" ? " pilot queued" : "");
-  const rid = specialPhase ? specialSet : readySet(), cd = cooldownUntil - now;
-  const sp = $("specialBtn");
-  sp.disabled = !rid; sp.classList.toggle("live", !!specialPhase);
+  // Special: round button with a radial recharge sweep (Dead Cells / Hades cast)
+  const rid = specialPhase ? specialSet : readySet(), cd = cooldownUntil - now, sp = $("specialBtn");
   const label = specialLabel(rid);
-  setHTML("specialBtn", (!rid ? `Set special · ${bestSetCount()}/7` : specialPhase === "windup" ? "Time slowing..." : specialPhase === "solo" ? `${label}!` : specialPending ? "On the next bar" : cd > 0 ? `Recharging ${Math.ceil(cd / 1000)} s` : `${label} ready`) + " <kbd>X</kbd>");
-  let lo = "";
+  let main, sub, cls, p;
+  if (!rid) { const k = bestSetCount(); main = `${k}/7`; sub = "Special"; cls = "locked"; p = k / 7; }
+  else if (specialPhase) { main = specialPhase === "windup" ? "..." : "SOLO"; sub = label; cls = "live"; p = 1; }
+  else if (specialPending) { main = "BAR"; sub = "Next bar"; cls = "live"; p = 1; }
+  else if (cd > 0) { main = `${Math.ceil(cd / 1000)}s`; sub = "Recharge"; cls = "charging"; p = 1 - cd / cooldownMs(); }
+  else { main = "READY"; sub = "Special"; cls = "ready"; p = 1; }
+  sp.disabled = !rid; sp.className = "rbtn special " + cls; sp.style.setProperty("--p", Math.max(0, Math.min(1, p)).toFixed(3));
+  sp.title = rid ? `${label} (X)` : "Complete a 7-piece set to unlock its special";
+  setText("spMain", main); setText("spSub", sub);
+  $("dashBtn").style.setProperty("--p", (1 - Math.max(0, P.dashCd) / (0.85 * (run.dashMul || 1))).toFixed(3));
+  // Band strip: one tile per layer with level pips; dropout and silence grey it with a bar countdown
+  const cb = curBarNow();
+  let bh = "";
   const order = [...run.lv.keys()].sort((a, b) => byId(a).order - byId(b).order);
-  for (const id of order) { const s = byId(id); lo += `<span class="chip ${s.state}" style="--c:${s.color}"><i></i><b>${s.power}</b><span>Lv ${run.lv.get(id)}${s.silenced ? " · silenced" : s.state === "dropped" ? " · dropout" : s.state === "queued" ? " · next bar" : ""}</span></span>`; }
-  for (let i = run.lv.size; i < layerCap(); i++) lo += `<span class="chip empty"><b>Open layer</b></span>`;
-  for (const sid in SETS) { const k = membersOf(sid).size; if (k) lo += `<span class="chip gear on" style="--c:${SETS[sid].color}"><i></i><b>${SETS[sid].name}</b><span>${k}/7${setTier(sid) ? " · +" + Math.round(setTier(sid) * 100) + "% area" : ""}${fullSet === sid ? " · bonus" : ""}</span></span>`; }
-  setHTML("loadout", lo);
+  for (const id of order) { const st = byId(id), lv = run.lv.get(id), down = st.silenced || st.state === "dropped";
+    const left = st.silenced ? st.silenced - cb : recoverBar >= 0 ? recoverBar - cb : 0;
+    bh += `<span class="tile ${st.state}${down ? " down" : ""}" style="--c:${st.color}" title="${st.power} Lv ${lv}${st.silenced ? " · silenced" : st.state === "dropped" ? " · dropout" : ""}"><b>${tileName(st.power)}</b><span class="lv">${lvPips(lv, 0, 3)}</span>${down ? `<span class="cd">${Math.max(1, left - 1)}<small>${st.silenced ? "muted" : "bars"}</small></span>` : ""}</span>`; }
+  for (let i = run.lv.size; i < layerCap(); i++) bh += `<span class="tile open" title="Open layer slot"><b>open</b></span>`;
+  bh += `<span class="sep"></span>`;
+  for (const l of run.lens) bh += `<span class="tile lens" style="--c:${EL[l.el].color}" title="${EL[l.el].name} Lens Lv ${l.lv}"><b>${LENS_SHORT[l.el] || EL[l.el].name.slice(0, 4)}${l.lv > 1 ? " II" : ""}</b></span>`;
+  for (let i = run.lens.length; i < LENS_MAX; i++) bh += `<span class="tile lens open" title="Empty lens socket"><b>lens</b></span>`;
+  setHTML("band", bh);
+  // Set progress: pips, and the next tier written out
+  let sh = "";
+  for (const sid in SETS) { const k = membersOf(sid).size; if (!k) continue; const S = SETS[sid], T = SET_TIERS[sid];
+    const tierAt = T ? T.tiers.map(t => t[0]) : [];
+    let pips = ""; for (let n = 1; n <= 7; n++) pips += `<i class="${n <= k ? "on" : ""}${tierAt.includes(n) ? " tier" : ""}"></i>`;
+    const nt = T && T.tiers.find(([n]) => n > k);
+    const next = k >= 7 ? (fullSet === sid ? "bonus on" : "special ready") : nt ? `${nt[0]}/7: +${Math.round(nt[1] * 100)}% area` : "7/7: special";
+    sh += `<span class="setrow${k >= 7 ? " full" : ""}" style="--c:${S.color}" title="${S.name} ${k}/7 · ${next}"><b>${S.name}</b><span class="sp">${pips}</span><span>${next}</span></span>`; }
+  setHTML("sets", sh);
 }
 function drawClock(step) {
   curStep = step;
@@ -2923,6 +3144,7 @@ function frame(ts) {
   hud();
   requestAnimationFrame(frame);
 }
+applyOpts();
 resize();
 P.x = AW / 2; P.y = AH / 2;
 showHub();
