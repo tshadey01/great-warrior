@@ -275,6 +275,8 @@ html { font-size: calc(16px * var(--ui, 1)); }
 .opts label { display: flex; gap: 8px; align-items: center; font-size: .86rem; color: var(--mute); }
 .opts input[type=checkbox] { accent-color: var(--gold); width: 16px; height: 16px; }
 .opts input[type=range] { accent-color: var(--gold); flex: 1; min-width: 90px; }
+.opts.vols { margin-bottom: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.opts .vol { color: var(--ink); font-weight: 600; }
 .opts output { font-family: var(--f-mono); font-size: .76rem; color: var(--ink); min-width: 3ch; }
 @media (max-width: 560px) {
   .tile { width: 3rem; height: 2.8rem; }
@@ -814,7 +816,10 @@ function build() {
   const limiter = new Tone.Limiter(-1);
   const meter = new Tone.Meter({ smoothing: 0.6 });
   const slowLP = new Tone.Filter({ type: "lowpass", frequency: 20000, rolloff: -24 });
-  master.chain(slowLP, comp, limiter, Tone.Destination);
+  // Volume settings: music and effects each get their own gain ahead of the shared slow-mo filter, compressor and limiter
+  const musicG = new Tone.Gain(1), sfxG = new Tone.Gain(1);
+  master.chain(musicG, slowLP, comp, limiter, Tone.Destination);
+  sfxG.connect(slowLP);
   limiter.connect(meter);
   const reverb = new Tone.Reverb({ decay: 2.8, preDelay: 0.02, wet: 1 }).connect(master);
   const duckBus = new Tone.Gain(1).connect(master);   // other layers duck under the full-set bonus
@@ -830,7 +835,7 @@ function build() {
     s.gate = s.wanted;
   }
   const F = id => byId(id).fader;
-  const n = { master, meter, reverb, pumpBus, duckBus, beatBus, slowLP };
+  const n = { master, meter, reverb, pumpBus, duckBus, beatBus, slowLP, musicG, sfxG };
   // Shred special: riser for the slow-motion windup, two solo guitars for the solo or the duel
   const riserBP = new Tone.Filter({ type: "bandpass", frequency: 400, Q: 2 }).connect(comp);
   n.riserBP = riserBP;
@@ -930,7 +935,7 @@ function build() {
   n.crash.volume.value = -9;
 
   // Hit sound effect (not a layer)
-  const hitBP = new Tone.Filter({ type: "bandpass", frequency: 1800, Q: 0.8 }).connect(master);
+  const hitBP = new Tone.Filter({ type: "bandpass", frequency: 1800, Q: 0.8 }).connect(sfxG);
   n.hitfx = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.001, decay: 0.25, sustain: 0 } }).connect(hitBP);
   n.hitfx.volume.value = -6;
 
@@ -1583,7 +1588,7 @@ let ctxReady = false;
 async function startAudio() {
   if (playing) return;
   await Tone.start();
-  if (!nodes) { nodes = build(); try { await nodes.reverb.ready; } catch (e) {} }
+  if (!nodes) { nodes = build(); applyVol(); try { await nodes.reverb.ready; } catch (e) {} }
   for (const s of STEMS) { const o = s.wanted && !s.dropped; s.fader.gain.cancelScheduledValues(0); s.fader.gain.value = o ? 1 : 0; s.gate = s.wanted; s.state = s.dropped ? "dropped" : (s.wanted ? "on" : "off"); }
   Tone.Transport.bpm.value = baseBpm;
   Tone.Transport.position = 0;
@@ -1684,13 +1689,17 @@ const BAND = { 3: "Trio", 4: "Quartet", 5: "Quintet", 6: "Sextet" };
 
 // ---------- Account save (this browser only) ----------
 const SAVE_KEY = "gw-gig-run-v1";
-function defaultSave() { return { xp: 0, level: 1, royalties: 0, owned: {}, bans: [], runs: 0, wins: 0, bestRoom: 0, dev: false, idle: false, opts: { dmg: true, shake: 1, calm: false, ui: 1 } }; }
+function defaultSave() { return { xp: 0, level: 1, royalties: 0, owned: {}, bans: [], runs: 0, wins: 0, bestRoom: 0, dev: false, idle: false, opts: { dmg: true, shake: 1, calm: false, ui: 1, vMaster: 1, vMusic: 1, vSfx: 1 } }; }
 let save = defaultSave();
 try { const j = JSON.parse(localStorage.getItem(SAVE_KEY) || "null"); if (j) save = Object.assign(defaultSave(), j); } catch (e) {}
 if (save.owned.metal) { save.owned["set-pm"] = 1; delete save.owned.metal; }
-const OPT = () => (save.opts = Object.assign({ dmg: true, shake: 1, calm: false, ui: 1 }, save.opts || {}));
-function applyOpts() { const o = OPT(); document.documentElement.style.setProperty("--ui", o.ui); document.getElementById("app").classList.toggle("calm", !!o.calm); }
-function optionsHTML() { const o = OPT(); return `<div class="opts">
+const OPT = () => (save.opts = Object.assign({ dmg: true, shake: 1, calm: false, ui: 1, vMaster: 1, vMusic: 1, vSfx: 1 }, save.opts || {}));
+// Volume: sliders are 0-100%, squared so the low end of the slider is usable; 0 mutes
+function applyVol() { if (!nodes) return; const o = OPT(); try { Tone.Destination.mute = o.vMaster <= 0; if (o.vMaster > 0) Tone.Destination.volume.value = Tone.gainToDb(o.vMaster * o.vMaster); } catch (e) {}
+  if (nodes) { nodes.musicG.gain.rampTo(o.vMusic * o.vMusic, 0.05); nodes.sfxG.gain.rampTo(o.vSfx * o.vSfx, 0.05); } }
+function applyOpts() { const o = OPT(); applyVol(); document.documentElement.style.setProperty("--ui", o.ui); document.getElementById("app").classList.toggle("calm", !!o.calm); }
+function optionsHTML() { const o = OPT(); const vol = (k, name) => `<label class="vol">${name} <input type="range" min="0" max="1" step="0.05" value="${o[k]}" data-opt="${k}" aria-label="${name} volume"><output>${Math.round(o[k] * 100)}%</output></label>`;
+  return `<div class="opts vols">${vol("vMaster", "Master")}${vol("vMusic", "Music")}${vol("vSfx", "Effects and ambience")}</div><div class="opts">
   <label><input type="checkbox" data-opt="dmg" ${o.dmg ? "checked" : ""}> Floating damage numbers</label>
   <label><input type="checkbox" data-opt="calm" ${o.calm ? "checked" : ""}> Reduce flashing and pulsing</label>
   <label>Screen shake <input type="range" min="0" max="1" step="0.25" value="${o.shake}" data-opt="shake"><output>${Math.round(o.shake * 100)}%</output></label>
@@ -2006,7 +2015,7 @@ function applyEl(e, dmg, el) {
 let amb = null;
 function ambInit() {
   if (amb || !nodes) return amb;
-  const bus = new Tone.Gain(1).connect(nodes.duckBus);
+  const bus = new Tone.Gain(1).connect(nodes.sfxG);
   // fire: low ember roar + random pops
   const fireG = new Tone.Gain(0).connect(bus);
   const roar = new Tone.Noise("brown"); roar.volume.value = -22; roar.chain(new Tone.Filter({ type: "lowpass", frequency: 420 }), fireG);
@@ -2023,7 +2032,7 @@ function ambInit() {
   const rumbleF = new Tone.Filter({ type: "lowpass", frequency: 260 }).connect(ltG);
   const rumble = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.25, decay: 2.2, sustain: 0, release: 0.5 } }).connect(rumbleF); rumble.volume.value = -4;
   // stun crash bypasses the duck bus so it lands extra loud
-  const crashBus = new Tone.Gain(1.4).connect(nodes.master);
+  const crashBus = new Tone.Gain(1.4).connect(nodes.sfxG);
   const crash = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.002, decay: 0.9, sustain: 0, release: 0.4 } });
   crash.chain(new Tone.Filter({ type: "lowpass", frequency: 5200 }), crashBus); crash.volume.value = 2;
   const boom = new Tone.MembraneSynth({ pitchDecay: 0.25, octaves: 5, envelope: { attack: 0.002, decay: 1.4, sustain: 0, release: 0.4 } }).connect(crashBus); boom.volume.value = 2;
@@ -2586,7 +2595,7 @@ function showHub() {
         <span>A full 7-piece set: <kbd>X</kbd> for its special. 10 s invincible, 30 s cooldown (45 s in boss rooms).</span>
         <span><kbd>Esc</kbd> pauses. Rewards: <kbd>1</kbd> to <kbd>4</kbd> (the 4th card skips).</span>
         <span>Progress is saved in this browser only.</span></div>
-        <h3 style="margin-top:10px">Options</h3>${optionsHTML()}</div>
+        <h3 style="margin-top:10px">Volume and options</h3>${optionsHTML()}</div>
     </div></div>`);
   document.getElementById("startBtn").addEventListener("click", async () => { await startAudio(); newRun(); });
   bindOptions(screenEl);
@@ -2620,7 +2629,7 @@ function buildSheet() {
   return `<div class="panel sheet"><div class="row-actions" style="justify-content:space-between"><h2>Paused</h2><div class="stat"><span>${run.pilot ? PILOTS[run.pilot].name : ""}</span><span>Room <b>${run.room}/12</b></span><span>Hull <b>${Math.ceil(P.hp)}/${P.maxHp}</b></span><span>Silenced <b>${run.kills}</b></span><span>Time <b>${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}</b></span></div></div>
     ${slotStrip()}
     <div class="cols"><div class="list"><h3>Band ${run.lv.size}/${layerCap()}</h3>${layersH}</div><div class="list"><h3>Gear and sets</h3>${gearH || "<p>No set pieces yet.</p>"}</div><div class="list"><h3>Lenses and mix</h3>${lensH}${mixH}</div></div>
-    <div class="list"><h3>Options</h3>${optionsHTML()}</div>
+    <div class="list"><h3>Volume and options</h3>${optionsHTML()}</div>
     <div class="row-actions"><button class="btn primary" id="resumeBtn" type="button">Resume <kbd>Esc</kbd></button><button class="btn" id="quitBtn" type="button">End run</button></div></div>`;
 }
 function togglePause() {
