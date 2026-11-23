@@ -953,7 +953,7 @@ function build() {
   n.hitfx = new Tone.NoiseSynth({ noise: { type: "brown" }, envelope: { attack: 0.001, decay: 0.25, sustain: 0 } }).connect(hitBP);
   n.hitfx.volume.value = -6;
 
-  n.loop = new Tone.Loop(tick, "16n").start(0);
+  n.loop = new Tone.Loop(time => { try { tick(time); } catch (e) { diagErr("music tick: " + e.message); } }, "16n").start(0);
   return n;
 }
 
@@ -1426,10 +1426,12 @@ function tick(time) {
   for (const id in SETS) {
     const m = setNow[id];
     if (!m || !m.size || !RT[id]) continue;
-    if (inBar === 0) stemBar(id, time, step);
-    SETS[id].play(RT[id].stem ? RT[id].stub : RT[id].I, { step, inBar, bar, absBar, c, d, time, has: q => m.has(q),
-      tight: pilotNow || m.size >= 4 || soloSet === id, pilot: pilotNow, full: fullSet === id,
-      solo: soloSet === id, soloStart: soloSet === id && absBar === specialBar && inBar === 0 });
+    try {   // one set failing must never silence the whole band
+      if (inBar === 0) stemBar(id, time, step);
+      SETS[id].play(RT[id].stem ? RT[id].stub : RT[id].I, { step, inBar, bar, absBar, c, d, time, has: q => m.has(q),
+        tight: pilotNow || m.size >= 4 || soloSet === id, pilot: pilotNow, full: fullSet === id,
+        solo: soloSet === id, soloStart: soloSet === id && absBar === specialBar && inBar === 0 });
+    } catch (e) { diagErr("set " + id + ": " + e.message); }
   }
   Tone.Draw.schedule(() => drawClock(step), time);
 }
@@ -1483,24 +1485,26 @@ function wireSet(id, on) {
 // buffer while the live instruments are unplugged, so they cost nothing. Attacks still fire on the same notes: play() runs
 // against stub instruments that only schedule the attack hooks. Tempo changes (Act II, Metronome, Mute, special windup)
 // fall back to the live set until a stem for the new tempo is ready.
-const STEM = {};   // set id -> { bpm, buf, bufSolo, busy }
+const STEM = {};   // set id -> { bufs: { bpm: AudioBuffer }, busy, failed } (kept across runs, so each set+tempo renders once)
+const stemBuf = (id, bpm) => STEM[id] && STEM[id].bufs[bpm];
 function foldLoop(ab, len) {   // add the tail that rings past the loop end back onto its start, so the loop is seamless
   const out = new AudioBuffer({ numberOfChannels: ab.numberOfChannels, length: len, sampleRate: ab.sampleRate });
   for (let ch = 0; ch < ab.numberOfChannels; ch++) { const a = ab.getChannelData(ch), o = out.getChannelData(ch); o.set(a.subarray(0, len)); for (let i = len; i < a.length; i++) o[(i - len) % len] += a[i]; }
   return out;
 }
 async function renderStem(id) {
-  const st = STEM[id] = STEM[id] || {};
-  if (st.busy || (st.buf && st.bpm === baseBpm)) return;
-  st.busy = true; const bpm = baseBpm, d = 60 / bpm / 4, sr = Tone.context.sampleRate, len = Math.round(STEPS * d * sr);
+  const st = STEM[id] = STEM[id] || { bufs: {} };
+  const bpm = baseBpm; if (st.busy || st.failed || st.bufs[bpm]) return;
+  st.busy = true; const d = 60 / bpm / 4, sr = Tone.context.sampleRate, len = Math.round(STEPS * d * sr);
   const all = new Set(SETS[id].pieces.flatMap(pc => pc.covers));
-  const one = async solo => foldLoop((await Tone.Offline(() => {
-    const out = new Tone.Gain(1).toDestination(), I = SETS[id].build(out);
-    for (let step = 0; step < STEPS; step++) { const inBar = step % BAR, bar = Math.floor(step / BAR);
-      SETS[id].play(I, { step, inBar, bar, absBar: bar, c: chordAt(step), d, time: step * d, has: q => all.has(q), tight: true, pilot: true, full: true, solo, soloStart: false }); }
-  }, STEPS * d + 2.5, 2, sr)).get(), len);
-  try { const buf = await one(false), bufSolo = await one(true); if (baseBpm === bpm) Object.assign(st, { bpm, buf, bufSolo }); }
-  catch (e) { st.failed = true; }
+  try {
+    const ab = (await Tone.Offline(() => {
+      const out = new Tone.Gain(1).toDestination(), I = SETS[id].build(out);
+      for (let step = 0; step < STEPS; step++) { const inBar = step % BAR, bar = Math.floor(step / BAR);
+        SETS[id].play(I, { step, inBar, bar, absBar: bar, c: chordAt(step), d, time: step * d, has: q => all.has(q), tight: true, pilot: true, full: true, solo: false, soloStart: false }); }
+    }, STEPS * d + 2.5, 2, sr)).get();
+    st.bufs[bpm] = foldLoop(ab, len);
+  } catch (e) { st.failed = true; diagErr("stem render " + id + ": " + e.message); }
   finally { st.busy = false; }
 }
 const NOOP = new Proxy(function () {}, { get: (t, p) => p === Symbol.toPrimitive ? () => 0 : NOOP, apply: () => NOOP });
@@ -1513,26 +1517,67 @@ function stubI(id, I) {
   }
   return out;
 }
-// At each bar line: start, swap (normal / under-solo) or stop a set's stem
+// ---------- Audio readout (F8) and recovery ----------
+// When the music cuts out on someone's machine, F8 shows what the audio engine is doing, so the cause can be read off the screen.
+const diag = { errs: [], on: false, an: null, el: null, ticks: -1, at: 0, tps: 0 };
+function diagErr(msg) { diag.errs.push(new Date().toLocaleTimeString() + " " + msg); if (diag.errs.length > 6) diag.errs.shift(); try { console.error(msg); } catch (e) {} }
+window.addEventListener("error", e => diagErr("page: " + e.message));
+window.addEventListener("unhandledrejection", e => diagErr("promise: " + (e.reason && e.reason.message || e.reason)));
+function stopStems() { for (const id in RT) { const r = RT[id]; if (!r.stem) continue; const old = r.stem; r.stem = null; try { old.src.stop(); old.g.disconnect(); } catch (e) {} r.liveOn = true; try { r.liveIn.gain.cancelScheduledValues(0); r.liveIn.gain.value = 1; r.liveIn.connect(r.bus); } catch (e) {} clearTimeout(r.unplugT); } }
+function diagText() {
+  const c = Tone.context, raw = c.rawContext, now = performance.now(), tk = Tone.Transport.ticks;
+  if (now - diag.at > 1000) { if (diag.ticks >= 0) diag.tps = Math.round((tk - diag.ticks) / ((now - diag.at) / 1000)); diag.ticks = tk; diag.at = now; }
+  let lvl = "-";
+  if (nodes) { if (!diag.an) { diag.an = raw.createAnalyser(); diag.an.fftSize = 1024; Tone.Destination.output.connect(diag.an); }
+    const b = new Float32Array(diag.an.fftSize); diag.an.getFloatTimeDomainData(b); let q = 0, nan = 0; for (const x of b) { if (x !== x) nan++; else q += x * x; } lvl = nan ? "NaN!" : Math.round(10 * Math.log10(q / b.length + 1e-12)) + " dB"; }
+  const sets = Object.keys(RT).map(id => id + (RT[id].stem ? " (pre-rendered)" : "") + (RT[id].liveOn === false && !RT[id].stem ? " (UNPLUGGED)" : "")).join(", ") || "none";
+  return [`Audio ${c.state} · ${raw.sampleRate} Hz · latency ${Math.round((raw.baseLatency || 0) * 1000)}+${Math.round((raw.outputLatency || 0) * 1000)} ms · lite ${OPT().lite ? "on" : "off"}`,
+    `Clock ${Math.round(c.currentTime)} s · song ${Tone.Transport.state} · ${Math.round(Tone.Transport.bpm.value)} BPM (base ${baseBpm}) · ${diag.tps} ticks/s`,
+    `Output ${lvl} · master ${nodes ? nodes.master.volume.value.toFixed(1) : "-"} dB · duck ${nodes ? nodes.duckBus.gain.value.toFixed(2) : "-"} · filter ${nodes ? Math.round(nodes.slowLP.frequency.value) : "-"} Hz`,
+    `Layers ${STEMS.filter(s => s.wanted).map(s => s.id + (s.silenced ? "(silenced)" : "")).join(", ") || "none"}`,
+    `Sets ${sets} · full ${fullSet || "-"} · special ${specialPhase || (specialPending ? "pending" : "-")}`,
+    ...(diag.errs.length ? ["Log:", ...diag.errs] : ["Log: nothing went wrong"])].join("\n");
+}
+function diagTick() { if (!diag.on) return; try { diag.el.textContent = diagText(); } catch (e) { diag.el.textContent = "readout failed: " + e.message; } }
+function toggleDiag() {
+  diag.on = !diag.on;
+  if (!diag.el) { diag.el = document.createElement("pre"); diag.el.id = "diag"; diag.el.style.cssText = "position:fixed;top:8px;right:8px;z-index:99;margin:0;padding:8px 10px;max-width:min(560px,94vw);white-space:pre-wrap;font:12px/1.4 ui-monospace,Consolas,monospace;background:rgba(0,0,0,.82);color:#e6f1ff;border:1px solid #445;border-radius:6px;pointer-events:none"; document.body.appendChild(diag.el); }
+  diag.el.hidden = !diag.on; diagTick();
+}
+setInterval(diagTick, 500);
+// Pause menu "Restart audio": rebuild every set, reset the mix and restart the song clock where it was
+function restartAudio() {
+  if (!nodes) return;
+  try { Tone.context.resume(); } catch (e) {}
+  stopStems();
+  const worn = Object.keys(RT); for (const id of worn) dropSet(id);
+  for (const id of worn) if (membersOf(id).size) { ensureSet(id); }
+  if (specialSet && RT[specialSet]) ensureSolo(specialSet);
+  const t = Tone.now();
+  for (const [prm, v] of [[nodes.duckBus.gain, 1], [nodes.beatBus.gain, 1], [nodes.slowLP.frequency, 20000], [nodes.master.volume, -6 + 1.5 * ((run && run.vol) || 0)]]) { try { prm.cancelScheduledValues(t); prm.setValueAtTime(v, t); } catch (e) {} }
+  try { Tone.Transport.bpm.cancelScheduledValues(t); Tone.Transport.bpm.setValueAtTime(baseBpm, t); } catch (e) {}
+  mixLoud = false; for (const s of STEMS) { s.fader.gain.cancelScheduledValues(t); s.fader.gain.setValueAtTime(s.wanted && !s.dropped ? 1 : 0, t); }
+  diagErr("audio restarted by player");
+}
+// At each bar line: start or stop a set's stem. Specials, tempo changes and anything unusual play live.
 function stemBar(id, time, step) {
   const r = RT[id]; if (!r) return;
-  const st = STEM[id], bpmNow = Tone.Transport.bpm.getValueAtTime(time);
-  const want = fullSet === id && !(specialPhase === "windup") && !specialPending;
-  if (want && !(st && st.buf && st.bpm === baseBpm) && !(st && (st.busy || st.failed))) setTimeout(() => renderStem(id), 0);
-  const ok = want && st && st.buf && st.bpm === baseBpm && Math.abs(bpmNow - baseBpm) < 0.5;
-  const variant = specialPhase === "solo" && specialSet === id ? "bufSolo" : "buf";
+  const bpmNow = Tone.Transport.bpm.getValueAtTime(time), buf = stemBuf(id, baseBpm);
+  const want = fullSet === id && !specialPhase && !specialPending;
+  if (want && !buf && !(STEM[id] && (STEM[id].busy || STEM[id].failed)) && Math.abs(bpmNow - baseBpm) < 0.5) setTimeout(() => renderStem(id), 0);
+  const ok = want && buf && Math.abs(bpmNow - baseBpm) < 0.5;
   const raw = Tone.context.rawContext, ms = Math.max(0, (time - Tone.now()) * 1000);
-  if (r.stem && (!ok || r.stem.variant !== variant)) {   // stop the old stem at this bar
+  if (r.stem && (!ok || r.stem.buf !== buf)) {   // stop the old stem at this bar
     const old = r.stem; r.stem = null;
     try { old.g.gain.setValueAtTime(1, time); old.g.gain.linearRampToValueAtTime(0, time + 0.03); old.src.stop(time + 0.05); } catch (e) {}
     setTimeout(() => { try { old.g.disconnect(); } catch (e) {} }, ms + 300);
   }
   if (ok && !r.stem) {
     const src = raw.createBufferSource(), g = raw.createGain();
-    src.buffer = st[variant]; src.loop = true; src.connect(g); Tone.connect(g, r.bus);
+    src.buffer = buf; src.loop = true; src.connect(g); Tone.connect(g, r.bus);
     g.gain.setValueAtTime(0, time); g.gain.linearRampToValueAtTime(1, time + 0.01);
-    src.start(time, ((step % STEPS) * 60 / st.bpm / 4) % src.buffer.duration);
-    r.stem = { src, g, variant };
+    src.start(time, ((step % STEPS) * 60 / baseBpm / 4) % buf.duration);
+    r.stem = { src, g, buf };
   }
   // the live instruments fade out under a stem (and are unplugged so they cost nothing), and come back without one
   const live = !r.stem;
@@ -2661,24 +2706,23 @@ function resetAudio() {
   for (const s of STEMS) { s.fader.gain.cancelScheduledValues(t); s.fader.gain.setValueAtTime(s.wanted ? 1 : 0, t); s.gate = s.wanted; s.state = s.wanted ? "on" : "off"; }
   wdTicks = -1; audioWatchdog(Infinity);
 }
-// Once a second: keep the audio clock running. If the music clock stalls or its tempo goes bad (seen when the special was
-// pressed right as a room started), do what pausing and resuming did for Gee: reset the tempo and restart the transport.
-let wdT = 0, wdTicks = -1;
+// Once a second: keep the music running. Never touch tempo history before "now": wiping it (cancelScheduledValues(0), the
+// previous version of this) throws the song clock backwards, and everything stays silent until it catches up, minutes later.
+// If the audio device itself stalls (driver hiccup, streaming, headset switch), leave the transport alone and just resume.
+let wdT = 0, wdTicks = -1, wdClock = -1, wdStall = 0;
 function audioWatchdog(ts) {
   if (!playing || paused || ts - wdT < 1000) return; wdT = ts === Infinity ? 0 : ts;
-  try { if (Tone.context.state !== "running") Tone.context.resume(); } catch (e) {}
+  if (ts === Infinity) { wdTicks = -1; wdClock = -1; wdStall = 0; }
+  if (Tone.context.state !== "running") { try { Tone.context.resume(); } catch (e) {} wdTicks = -1; wdClock = -1; return; }
   if (Tone.Transport.state !== "started") { Tone.Transport.start(); wdTicks = -1; return; }
-  if (Tone.context.state !== "running") return;
-  const tk = Tone.Transport.ticks, bpm = Tone.Transport.bpm.value;
-  const bad = !Number.isFinite(tk) || !Number.isFinite(bpm) || bpm < 30 || (wdTicks >= 0 && tk <= wdTicks);
-  if (bad) {
-    const t = Tone.now();
-    try { Tone.Transport.bpm.cancelScheduledValues(0); Tone.Transport.bpm.setValueAtTime(baseBpm, t); } catch (e) {}
-    if (nodes) for (const [prm, v] of [[nodes.slowLP.frequency, 20000], [nodes.master.volume, -6 + 1.5 * ((run && run.vol) || 0)], [nodes.duckBus.gain, 1], [nodes.beatBus.gain, 1]]) { if (!Number.isFinite(prm.value)) { try { prm.cancelScheduledValues(0); prm.setValueAtTime(v, t); } catch (e) {} } }
-    Tone.Transport.pause(); Tone.Transport.start("+0.05");
-    wdTicks = -1; return;
-  }
-  wdTicks = tk;
+  const t = Tone.now(), clk = Tone.context.currentTime, tk = Tone.Transport.ticks, bpm = Tone.Transport.bpm.value;
+  if (!Number.isFinite(bpm) || bpm < 30) { try { Tone.Transport.bpm.cancelScheduledValues(t); Tone.Transport.bpm.setValueAtTime(baseBpm, t); } catch (e) {} }
+  if (nodes) for (const [prm, v] of [[nodes.slowLP.frequency, 20000], [nodes.master.volume, -6 + 1.5 * ((run && run.vol) || 0)], [nodes.duckBus.gain, 1], [nodes.beatBus.gain, 1]]) { if (!Number.isFinite(prm.value)) { try { prm.cancelScheduledValues(t); prm.setValueAtTime(v, t); } catch (e) {} } }
+  const clockMoved = wdClock >= 0 && clk - wdClock > 0.5;
+  // the audio clock ran but the song clock did not, twice in a row: restart the transport where it stopped
+  if (clockMoved && wdTicks >= 0 && Number.isFinite(tk) && tk <= wdTicks) { if (++wdStall >= 2) { Tone.Transport.pause(); Tone.Transport.start("+0.05"); wdStall = 0; wdTicks = -1; wdClock = clk; return; } }
+  else wdStall = 0;
+  wdTicks = tk; wdClock = clk;
 }
 function resetMix() { if (!nodes) return; nodes.master.volume.rampTo(-6, 0.5); nodes.kick.volume.rampTo(0, 0.5); lensSound(true); if (amb) ambBeds({ fireG: 0, coldG: 0, ltG: 0 }); }
 // Lenses colour every weapon layer: the weapon stems feed a shared lens bus with one effect per element
@@ -2775,6 +2819,7 @@ function showHub() {
         <span>Getting hit triggers <b>Dropout</b>: your newest layer and its weapon cut out for 2 bars.</span>
         <span>A full 7-piece set: <kbd>X</kbd> for its special. 10 s invincible, 30 s cooldown (45 s in boss rooms).</span>
         <span><kbd>Esc</kbd> pauses. Rewards: <kbd>1</kbd> to <kbd>4</kbd> (the 4th card skips).</span>
+        <span>Music cut out? <kbd>Esc</kbd> then Restart audio. <kbd>F8</kbd> shows the audio readout.</span>
         <span>Progress is saved in this browser only.</span></div>
         <h3 style="margin-top:10px">Volume and options</h3>${optionsHTML()}</div>
     </div></div>`);
@@ -2812,13 +2857,14 @@ function buildSheet() {
     ${slotStrip()}
     <div class="cols"><div class="list"><h3>Band ${run.lv.size}/${layerCap()}</h3>${layersH}</div><div class="list"><h3>Gear and sets</h3>${gearH || "<p>No set pieces yet.</p>"}</div><div class="list"><h3>Lenses and mix</h3>${lensH}${mixH}</div></div>
     <div class="list"><h3>Volume and options</h3>${optionsHTML()}</div>
-    <div class="row-actions"><button class="btn primary" id="resumeBtn" type="button">Resume <kbd>Esc</kbd></button><button class="btn" id="quitBtn" type="button">End run</button></div></div>`;
+    <div class="row-actions"><button class="btn primary" id="resumeBtn" type="button">Resume <kbd>Esc</kbd></button><button class="btn" id="fixAudioBtn" type="button" title="Use this if the music cuts out. F8 shows the audio readout.">Restart audio</button><button class="btn" id="quitBtn" type="button">End run</button></div></div>`;
 }
 function togglePause() {
   if (!run || run.mode !== "fight") return;
   paused = !paused;
-  if (paused) { Tone.Transport.pause(); if (amb) amb.bus.gain.rampTo(0, 0.2); showScreen(buildSheet()); bindOptions(screenEl);
+  if (paused) { Tone.Transport.pause(); stopStems(); if (amb) amb.bus.gain.rampTo(0, 0.2); showScreen(buildSheet()); bindOptions(screenEl);
     document.getElementById("resumeBtn").addEventListener("click", togglePause);
+    document.getElementById("fixAudioBtn").addEventListener("click", () => { restartAudio(); togglePause(); });
     document.getElementById("quitBtn").addEventListener("click", () => { paused = false; Tone.Transport.start(); if (amb) amb.bus.gain.rampTo(1, 0.4); hideScreen(); run.mode = "fight"; endRun(false); }); }
   else { Tone.Transport.start(); if (amb) amb.bus.gain.rampTo(1, 0.4); hideScreen(); }
 }
@@ -3290,6 +3336,7 @@ document.addEventListener("keydown", e => {
   if (e.target.closest && e.target.closest("input")) return;
   if (KEYMAP[e.code]) { keys.add(KEYMAP[e.code]); if (run && run.mode === "fight") { e.preventDefault(); markInput(); } return; }
   if (e.code === "Escape") { togglePause(); return; }
+  if (e.code === "F8") { e.preventDefault(); toggleDiag(); return; }
   if (run && run.mode === "fight" && !paused) {
     if (e.code === "Space" || e.code === "ShiftLeft" || e.code === "ShiftRight") { e.preventDefault(); if (!e.repeat) dash(); }
     else if (e.code === "KeyX") triggerSpecial();
